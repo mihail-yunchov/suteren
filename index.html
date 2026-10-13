@@ -102,7 +102,14 @@
   .b-breakdown{display:flex;flex-direction:column;gap:1px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--border)}
   .b-breakdown span{font-size:10.5px;color:var(--muted);font-weight:600}
   .b-breakdown span b{color:var(--text);font-weight:800}
+  .b-breakdown span b{white-space:nowrap}
+  @media (max-width:480px){.budget-due-row .b-breakdown span{font-size:9.5px}}
   .breakdown-note{font-size:11.5px;line-height:1.5;color:var(--muted);margin-top:10px}
+  /* Втори ред карти: Събираемост | Дължимо | Прогноза (14.10.2026, като Вход А/Б) */
+  .budget-due-row{display:grid;grid-template-columns:repeat(3, minmax(0,1fr));gap:8px;margin-top:8px}
+  .b-val.due{color:var(--amber)}
+  .budget-card .b-note{margin-top:5px;font-size:9px;color:var(--muted);line-height:1.35}
+  .budget-card[title]{cursor:help}
 
   .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;box-shadow:0 2px 10px rgba(25,33,102,0.05)}
   .chart-box{position:relative;width:100%;height:220px}
@@ -298,7 +305,7 @@
   </div>
 
   <div id="result" class="hidden"></div>
-  <div class="foot">Данните не са в реално време — обновяват се периодично. Дължимата сума се смята спрямо отчета към 11.11.2025 плюс начислените такси и плащания оттогава насам, така че скорошен превод може все още да не личи тук.</div>
+  <div class="foot">Данните не са в реално време — обновяват се периодично. Дължимата сума е начислените по тарифата такси минус нанесените плащания, така че скорошен превод може все още да не личи тук.</div>
 </div>
 
 <script>
@@ -716,7 +723,13 @@ function updateNavStuck_(){
 window.addEventListener('scroll', updateNavStuck_, { passive: true });
 window.addEventListener('resize', updateNavStuck_);
 
-function escapeHtml(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escapeHtml(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// Кратък запис на сума за оста/етикетите на графиката: 950 € / 17,1k €
+function shortEur_(v){
+  var a = Math.abs(Number(v) || 0);
+  var t = a >= 1000 ? (Math.round(a / 100) / 10).toString().replace('.', ',') + 'k' : String(Math.round(a));
+  return (v < 0 ? '-' : '') + t + ' €';
+}
 
 function buildPortalNavHtml_(isAdmin){
   return '<div class="portal-nav"><div class="portal-nav-inner">'
@@ -742,14 +755,58 @@ function render(d){
     return '<div class="b-breakdown"><span>ФРО: <b>' + fmt(fro) + '</b></span><span>ФУП: <b>' + fmt(fup) + '</b></span></div>';
   }
   var showBreakdown = (bbInc.fro || bbInc.tup || bbExp.fro || bbExp.tup);
-  var budgetHtml = '<div class="budget-grid">'
+  var budgetGridHtml = '<div class="budget-grid">'
     + '<div class="budget-card"><div class="b-label">Приходи</div><div class="b-val inc">' + fmt(totals.income) + '</div>' + (showBreakdown ? breakdownLines_(bbInc.fro, bbInc.tup) : '') + '</div>'
     + '<div class="budget-card"><div class="b-label">Разходи</div><div class="b-val exp">' + fmt(totals.expense) + '</div>' + (showBreakdown ? breakdownLines_(bbExp.fro, bbExp.tup) : '') + '</div>'
     + '<div class="budget-card"><div class="b-label">Каса</div><div class="b-val bal">' + fmt(totals.balance) + '</div>' + (showBreakdown ? breakdownLines_(bbBal.fro, bbBal.tup) : '') + '</div>'
-    + '</div>'
-    + (showBreakdown && bb.overrideUnits > 0
+    + '</div>';
+  var budgetNoteHtml = (showBreakdown && bb.overrideUnits > 0
         ? '<div class="breakdown-note">' + bb.overrideUnits + ' обект(а) с ръчно зададена лична такса са преброени изцяло във „ФУП" (не следват тарифната разбивка).</div>'
         : '');
+
+  // Втори ред карти: Събираемост (под „Приходи"), Дължимо (под „Разходи"), Прогноза (под „Каса").
+  // Всички са агрегати без имена; логиката е в Code.gs (collectionRate, totalOutstanding, buildForecast_).
+  var to = d.totalOutstanding, cr = d.collectionRate, fc = d.forecast;
+  var pctTxt = function(p){ return (p == null ? '—' : String(p).replace('.', ',') + ' %'); };
+  var twoLines_ = function(l1, v1, l2, v2){
+    return '<div class="b-breakdown"><span>' + l1 + ': <b>' + v1 + '</b></span><span>' + l2 + ': <b>' + v2 + '</b></span></div>';
+  };
+  // Събираемост: ЦЯЛОТО събрано (вкл. авансово платеното напред) / начисленото от началото до КРАЯ на текущото
+  // тримесечие. Годините — само при задържане (title).
+  var rateCardHtml = '';
+  if (cr && cr.pct != null) {
+    var rateCls = cr.pct >= 90 ? 'inc' : (cr.pct >= 75 ? 'due' : 'exp');
+    var allYears = (cr.years || []).map(function(y){ return y.year + ': ' + pctTxt(y.pct) + ' (' + fmt(y.collected) + ' от ' + fmt(y.charged) + ')'; });
+    if (cr.advanceNextYears > 0.005) allYears.push('Аванс за следващи години: ' + fmt(cr.advanceNextYears));
+    rateCardHtml = '<div class="budget-card budget-rate" title="' + escapeHtml(allYears.join('\n')) + '">'
+      + '<div class="b-label">Събираемост</div><div class="b-val ' + rateCls + '">' + pctTxt(cr.pct) + '</div>'
+      + twoLines_('Събрано', fmt(cr.collected), 'Начислено', fmt(cr.charged))
+      + '</div>';
+  }
+  // Дължимо — само до края на ТЕКУЩОТО тримесечие (без „следв.").
+  var dueCardHtml = '';
+  if (to) {
+    dueCardHtml = '<div class="budget-card budget-due">'
+      + '<div class="b-label">Дължимо</div><div class="b-val due">' + fmt(to.amount) + '</div>'
+      + twoLines_('ФРО', fmt(to.fro || 0), 'ФУП', fmt(to.fup || 0))
+      + '<div class="b-note">' + escapeHtml('до края на тримесечието (' + monthLabel(to.curEndKey) + ')') + '</div>'
+      + '</div>';
+  }
+  // Прогноза за следващата календарна година: резултат (приходи − разходи), ФРО/ФУП отдолу; детайли в title.
+  var fcCardHtml = '';
+  if (fc && fc.result) {
+    var sgn = function(v){ return (v > 0.005 ? '+' : '') + fmt(v); };
+    var fcTitle = 'Очаквани приходи: ' + fmt(fc.income.total) + ' (при ' + String(fc.collectionPct).replace('.', ',') + ' % събираемост)'
+      + '\nОчаквани разходи: ' + fmt(fc.expense.total) + ' (по последните 12 месеца + планирани ремонти)';
+    fcCardHtml = '<div class="budget-card budget-fc" title="' + escapeHtml(fcTitle) + '">'
+      + '<div class="b-label">Прогноза ' + escapeHtml(fc.year) + '</div>'
+      + '<div class="b-val ' + (fc.result.total >= 0 ? 'inc' : 'exp') + '">' + sgn(fc.result.total) + '</div>'
+      + twoLines_('ФРО', sgn(fc.result.fro), 'ФУП', sgn(fc.result.fup))
+      + '</div>';
+  }
+  var budgetDueRowHtml = (rateCardHtml || dueCardHtml || fcCardHtml)
+    ? '<div class="budget-due-row">' + rateCardHtml + dueCardHtml + fcCardHtml + '</div>' : '';
+  var budgetHtml = budgetGridHtml + budgetDueRowHtml + budgetNoteHtml;
 
   var yearly = yearlyFromTrend(d.budgetTrend);
   var yearlyRowsHtml = yearly.map(function(y){
@@ -1002,7 +1059,9 @@ function drawCharts(d){
   }
 
   var ctx2 = document.getElementById('trendChart').getContext('2d');
-  var fullTrend = d.budgetTrend || [];
+  // Месеци в бъдещето (напр. обобщен запис с дата 2027 г.) не се показват в графиката.
+  var nowD = new Date(), nowKey = nowD.getFullYear() + '-' + String(nowD.getMonth() + 1).padStart(2, '0');
+  var fullTrend = (d.budgetTrend || []).filter(function(x){ return x.month <= nowKey; });
   var runningCash = 0;
   var fullCash = fullTrend.map(function(x){ runningCash += (x.income - x.expense); return Math.round(runningCash * 100) / 100; });
   var trend = fullTrend.slice(-12);
@@ -1011,13 +1070,21 @@ function drawCharts(d){
   var labels = rawMonths.map(monthLabel);
   var incomeData = trend.map(function(x){ return x.income; });
   var expenseData = trend.map(function(x){ return -x.expense; });
+  // Етикети и на двете серии (приходи над стълба, разходи под него); grace на оста пази етикета в графиката.
+  function barLabelShow_(c){ return Math.abs(c.dataset.data[c.dataIndex]) > 0.5; }
+  function barLabelFont_(c){ return { size: c.chart.width < 480 ? 9 : 10, weight: '700' }; }
+  // На тесен екран — без „€", за да не се застъпват етикетите.
+  function barLabelFmt_(v, c){ var t = shortEur_(v); return c.chart.width < 480 ? t.replace(' €', '') : t; }
   new Chart(ctx2, {
     type: 'bar',
     data: {
       labels: labels,
       datasets: [
-        { type: 'bar', label: 'Приходи', data: incomeData, backgroundColor: green, borderRadius: 3, order: 2, yAxisID: 'y' },
-        { type: 'bar', label: 'Разходи', data: expenseData, backgroundColor: red, borderRadius: 3, order: 2, yAxisID: 'y' },
+        { type: 'bar', label: 'Приходи', data: incomeData, backgroundColor: green, borderRadius: 3, order: 2, yAxisID: 'y',
+          datalabels: { display: barLabelShow_, color: '#2b7a36', font: barLabelFont_, anchor: 'end', align: 'top', offset: 2, formatter: barLabelFmt_ } },
+        { type: 'bar', label: 'Разходи', data: expenseData, backgroundColor: red, borderRadius: 3, order: 2, yAxisID: 'y',
+          // При отрицателни стълбове datalabels брои "start" като долния край на стълба.
+          datalabels: { display: barLabelShow_, color: red, font: barLabelFont_, anchor: 'start', align: 'bottom', offset: 2, formatter: barLabelFmt_ } },
         { type: 'line', label: 'Каса (кумулативно)', data: cashData, borderColor: '#192166', backgroundColor: '#192166', borderWidth: 2, pointRadius: 0, tension: .25, order: 1, yAxisID: 'y1' }
       ]
     },
@@ -1043,8 +1110,8 @@ function drawCharts(d){
           },
           grid: { display: false }
         },
-        y: { stacked: true, position: 'left', ticks: { color: muted, font: { size: 11 }, callback: function(v){ return v + ' €'; } }, grid: { color: gridColor } },
-        y1: { position: 'right', ticks: { color: '#192166', font: { size: 10 }, callback: function(v){ return v + ' €'; } }, grid: { display: false } }
+        y: { stacked: true, position: 'left', grace: '15%', ticks: { color: muted, font: { size: 11 }, callback: function(v){ return shortEur_(v); } }, grid: { color: gridColor } },
+        y1: { position: 'right', grace: '15%', ticks: { color: '#192166', font: { size: 10 }, callback: function(v){ return shortEur_(v); } }, grid: { display: false } }
       }
     }
   });
