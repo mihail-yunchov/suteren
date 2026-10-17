@@ -326,7 +326,10 @@ var SHOW_QUARTER_VIEW_ALL = true;
 var SHOW_MONTHLY_CHART = false; // "Приходи и разходи по месеци" (вкл. линията на касата)
 var SHOW_CASH_CHART = false;    // (виж по-горе)
 var SHOW_YEARLY = false;        // "Годишен отчет"
-var FULL_VIEW_ROLE = 'Касиер';  // ролята в ДОСТЪП (колона I), която вижда и скритите финансови секции
+var FULL_VIEW_ROLE = '';        // ролята в ДОСТЪП (колона I), която вижда и скритите секции. Празно = скрито за всички (18.10.2026). За да ги вижда Касиер: 'Касиер'.
+
+// Секция "Поддръжка — Сигнали за повреди" — ВРЕМЕННО скрита за ВСИЧКИ, вкл. Касиер/Домоуправител (както във Вход Б). За връщане: true.
+var SHOW_SIGNALS = false;
 
 function fmt(n){ return (Number(n)||0).toLocaleString('bg-BG',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €'; }
 function fmtOrDash(n, title){
@@ -1013,7 +1016,7 @@ function render(d){
       + '</div></div>';
   }
 
-  var fullView = !!(d.isAdmin && d.role === FULL_VIEW_ROLE);
+  var fullView = !!(FULL_VIEW_ROLE && d.isAdmin && d.role === FULL_VIEW_ROLE);
   document.getElementById('result').innerHTML = buildPortalNavHtml_(d.isAdmin)
     + '<div id="obekt">'
     + '<div class="unit-card">'
@@ -1039,7 +1042,7 @@ function render(d){
       + '</div></div>'
     + '</div>'
     + '<div id="finansi">'
-    + '<div class="section"><div class="section-label">Прозрачност</div><div class="section-title">Топ длъжници <em style="color:var(--teal-deep);font-style:italic">(без имена)</em></div>'
+    + '<div class="section"><div class="section-label">Прозрачност</div><div class="section-title">Топ длъжници</div>'
       + '<div class="chart-card" id="debtorsCard"></div></div>'
     + '<div class="section"><div class="section-label">Финанси</div><div class="section-title">Бюджет на Сутерен</div>' + budgetHtml
       + ((SHOW_MONTHLY_CHART || SHOW_CASH_CHART || fullView) ? '<div class="section-title" style="margin-top:26px">Приходи и разходи по месеци</div>'
@@ -1056,8 +1059,8 @@ function render(d){
       ) : '')
     + '<div id="pomosht">'
     + '<div class="section"><div class="section-label">Помощ</div><div class="section-title">Важни телефони</div><div class="contact-card">' + contactsHtml + '</div></div>'
-    + '<div class="section"><div class="section-label">Поддръжка</div><div class="section-title">Сигнали за повреди</div>'
-      + '<div class="signal-card">' + signalsListWrapHtml + signalFormHtml + '</div></div>'
+    + (SHOW_SIGNALS ? ('<div class="section"><div class="section-label">Поддръжка</div><div class="section-title">Сигнали за повреди</div>'
+      + '<div class="signal-card">' + signalsListWrapHtml + signalFormHtml + '</div></div>') : '')
     + '</div>'
     + quorumHtml
     + (d.isAdmin ? '<button class="export-btn" onclick="exportCsv()">📥 Изтегли всички данни (CSV)</button>' : '')
