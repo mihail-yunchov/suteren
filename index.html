@@ -337,6 +337,7 @@ var SHOW_PHONES = false;
 // Админ списък по тримесечия: обектите, платени напред ("✓ платено до …"), са ВРЕМЕННО скрити от графиката, докато се проверят
 // (някои дати изглеждат нереални, напр. до Мар '29). Броят им се показва под графиката; Excel-ът ги съдържа. За показване: true.
 var SHOW_COVERED_IN_LIST = false;
+var SHOW_COVERED_NOTE = false; // бележка „Платили напред (N) са скрити“ под графиката
 
 function fmt(n){ return (Number(n)||0).toLocaleString('bg-BG',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €'; }
 function fmtOrDash(n, title){
@@ -482,9 +483,11 @@ function drawAdminChart(d){
   var nPaid = list.filter(function(x){ return x.until; }).length;
   if (!SHOW_COVERED_IN_LIST) list = list.filter(function(x){ return !x.until; });
   if (covEl) {
-    covEl.innerHTML = (nPaid && !SHOW_COVERED_IN_LIST)
-      ? '<strong>Платили напред (' + nPaid + ')</strong> са скрити от списъка (временно, за проверка).'
-      : (nPaid ? '<strong>Платили напред (' + nPaid + '):</strong> показани са със зелен етикет „✓ платено до …“.' : '');
+    // Бележката е скрита (19.10.2026). За показване на броя на скритите: SHOW_COVERED_NOTE = true.
+    covEl.innerHTML = !SHOW_COVERED_NOTE ? ''
+      : ((nPaid && !SHOW_COVERED_IN_LIST)
+        ? '<strong>Платили напред (' + nPaid + ')</strong> са скрити от списъка (временно, за проверка).'
+        : (nPaid ? '<strong>Платили напред (' + nPaid + '):</strong> показани са със зелен етикет „✓ платено до …“.' : ''));
   }
   if (window.__adminChart) { window.__adminChart.destroy(); window.__adminChart = null; }
   if (!list.length) {
