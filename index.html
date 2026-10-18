@@ -102,7 +102,14 @@
   .b-breakdown{display:flex;flex-direction:column;gap:1px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--border)}
   .b-breakdown span{font-size:10.5px;color:var(--muted);font-weight:600}
   .b-breakdown span b{color:var(--text);font-weight:800}
+  .b-breakdown span b{white-space:nowrap}
+  @media (max-width:480px){.budget-due-row .b-breakdown span{font-size:9.5px}}
   .breakdown-note{font-size:11.5px;line-height:1.5;color:var(--muted);margin-top:10px}
+  /* Втори ред карти: Събираемост | Дължимо | Прогноза (14.10.2026, като Вход А/Б) */
+  .budget-due-row{display:grid;grid-template-columns:repeat(3, minmax(0,1fr));gap:8px;margin-top:8px}
+  .b-val.due{color:var(--amber)}
+  .budget-card .b-note{margin-top:5px;font-size:9px;color:var(--muted);line-height:1.35}
+  .budget-card[title]{cursor:help}
 
   .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;box-shadow:0 2px 10px rgba(25,33,102,0.05)}
   .chart-box{position:relative;width:100%;height:220px}
@@ -167,7 +174,8 @@
     .chart-box{height:190px}
   }
 
-  .admin-toggle{width:100%;margin-bottom:22px;background:var(--grad-primary);color:#fff;border:none;border-radius:10px;padding:14px;font-weight:800;font-size:14px;cursor:pointer;font-family:'Nunito Sans',sans-serif;display:flex;align-items:center;justify-content:center;gap:8px}
+  .admin-toggle .toggle-hint{font-size:11.5px;font-weight:600;opacity:.85;background:rgba(255,255,255,.18);border-radius:999px;padding:3px 10px}
+  .admin-toggle{flex-direction:column;gap:6px !important;width:100%;margin-bottom:22px;background:var(--grad-primary);color:#fff;border:none;border-radius:10px;padding:14px;font-weight:800;font-size:14px;cursor:pointer;font-family:'Nunito Sans',sans-serif;display:flex;align-items:center;justify-content:center;gap:8px}
 
   #adminView{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:22px}
   .admin-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:10px}
@@ -298,7 +306,7 @@
   </div>
 
   <div id="result" class="hidden"></div>
-  <div class="foot">Данните не са в реално време — обновяват се периодично. Дължимата сума се смята спрямо отчета към 11.11.2025 плюс начислените такси и плащания оттогава насам, така че скорошен превод може все още да не личи тук.</div>
+  <div class="foot">Данните не са в реално време — обновяват се периодично. Дължимата сума е начислените по тарифата такси минус нанесените плащания, така че скорошен превод може все още да не личи тук.</div>
 </div>
 
 <script>
@@ -307,6 +315,28 @@ var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwQEBMauy9B0a0n9Q03HvW
 // Таб "Архив" (протоколи от общи събрания) — скрит, докато не се нанесат протоколите (както при Вход А и Б).
 // За да се покаже: смени на true.
 var SHOW_PROTOCOLS = false;
+
+// Разширен изглед "Задължения по тримесечия" — видим за ВСИЧКИ (от 14.10.2026, както във Вход А/Б), само номера на обекти,
+// без имена. false → отново само за Касиер/Домоуправител (бутонът се скрива; бекендът връща списъка на всички).
+var SHOW_QUARTER_VIEW_ALL = true;
+
+// Скрити за собственици и Домоуправител (14.10.2026, както във Вход А/Б); ролята FULL_VIEW_ROLE (Касиер) ги вижда винаги.
+// В Сутерен графиката е обща (стълбове по месеци + линия на касата), затова се показва, ако е вдигнат SHOW_MONTHLY_CHART
+// или SHOW_CASH_CHART. За да се покажат на всички: true.
+var SHOW_MONTHLY_CHART = false; // "Приходи и разходи по месеци" (вкл. линията на касата)
+var SHOW_CASH_CHART = false;    // (виж по-горе)
+var SHOW_YEARLY = false;        // "Годишен отчет"
+var FULL_VIEW_ROLE = '';        // ролята в ДОСТЪП (колона I), която вижда и скритите секции. Празно = скрито за всички (18.10.2026). За да ги вижда Касиер: 'Касиер'.
+
+// Секция "Поддръжка — Сигнали за повреди" — ВРЕМЕННО скрита за ВСИЧКИ, вкл. Касиер/Домоуправител (както във Вход Б). За връщане: true.
+var SHOW_SIGNALS = false;
+
+// "Важни телефони" — ВРЕМЕННО скрити за всички (19.10.2026). За връщане: true.
+var SHOW_PHONES = false;
+
+// Админ списък по тримесечия: обектите, платени напред ("✓ платено до …"), са ВРЕМЕННО скрити от графиката, докато се проверят
+// (някои дати изглеждат нереални, напр. до Мар '29). Броят им се показва под графиката; Excel-ът ги съдържа. За показване: true.
+var SHOW_COVERED_IN_LIST = false;
 
 function fmt(n){ return (Number(n)||0).toLocaleString('bg-BG',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €'; }
 function fmtOrDash(n, title){
@@ -417,6 +447,9 @@ function toggleAdmin(){
   var el = document.getElementById('adminView');
   var opening = el.classList.contains('hidden');
   el.classList.toggle('hidden');
+  var hint = document.getElementById('adminToggleHint'), tbtn = document.getElementById('adminToggleBtn');
+  if (hint) hint.textContent = opening ? 'Натисни, за да скриеш ▴' : 'Натисни, за да отвориш ▾';
+  if (tbtn) tbtn.setAttribute('aria-expanded', opening ? 'true' : 'false');
   if (opening) {
     document.getElementById('printDate').textContent = 'Актуално към ' + new Date().toLocaleDateString('bg-BG', {day:'2-digit', month:'long', year:'numeric'});
     drawAdminChart(window.__lastData);
@@ -427,14 +460,31 @@ function toggleAdmin(){
 function drawAdminChart(d){
   // Админ списък по тримесечия (quarterList от бекенда): дължимо сега + остатък до края на текущото
   // тримесечие; ако текущото е платено — сумата за следващото. В реда от ДОСТЪП (Excel).
-  var list = (d && d.quarterList) || [];
+  // v1.9: списъкът включва ВСИЧКИ обекти (в реда от ДОСТЪП), вкл. платилите напред — те са с празна лента и
+  // зелен етикет "✓ платено до …", за да се виждат лесно. quarterAll е пълният списък; quarterList — само със суми.
+  var qlist = (d && d.quarterList) || [];
+  var covList = (d && d.quarterCovered) || [];
+  var qByUnit = {}, covByUnit = {};
+  qlist.forEach(function(x){ qByUnit[x.unit] = x; });
+  covList.forEach(function(x){ covByUnit[x.unit] = x.until; });
+  var list;
+  if (d && d.quarterAll && d.quarterAll.length) {
+    list = d.quarterAll.map(function(a){
+      var q = qByUnit[a.unit];
+      if (q) return { unit: a.unit, due: q.due, rest: q.rest, next: q.next, paid: q.paid, until: null };
+      return { unit: a.unit, due: 0, rest: 0, next: 0, paid: a.paid, until: covByUnit[a.unit] || null };
+    });
+  } else {
+    list = qlist.map(function(q){ return { unit: q.unit, due: q.due, rest: q.rest, next: q.next, paid: q.paid, until: null }; });
+  }
   var box = document.getElementById('allDebtorsBox');
   var covEl = document.getElementById('coveredNote');
+  var nPaid = list.filter(function(x){ return x.until; }).length;
+  if (!SHOW_COVERED_IN_LIST) list = list.filter(function(x){ return !x.until; });
   if (covEl) {
-    var cov = (d && d.quarterCovered) || [];
-    covEl.innerHTML = cov.length
-      ? '<strong>Платили напред — не са в списъка:</strong> ' + cov.map(function(x){ return escapeHtml(x.unit) + ' (до ' + escapeHtml(monthLabel(x.until)) + ')'; }).join(', ')
-      : '';
+    covEl.innerHTML = (nPaid && !SHOW_COVERED_IN_LIST)
+      ? '<strong>Платили напред (' + nPaid + ')</strong> са скрити от списъка (временно, за проверка).'
+      : (nPaid ? '<strong>Платили напред (' + nPaid + '):</strong> показани са със зелен етикет „✓ платено до …“.' : '');
   }
   if (window.__adminChart) { window.__adminChart.destroy(); window.__adminChart = null; }
   if (!list.length) {
@@ -452,9 +502,13 @@ function drawAdminChart(d){
     { label: 'Тримесечие ' + curTxt, color: '#d97706', get: function(x){ return x.due + x.rest; } },
     { label: 'Следващо ' + nextTxt, color: '#1fb5c3', get: function(x){ return x.next; } }
   ];
+  // Етикет: дължимо + колко е платено досега (на тесен екран — съкратено).
+  var narrowAdm = box.clientWidth < 480;
   function labelText(row){
-    if (row.next > 0.005) return 'следв. ' + row.next.toFixed(2) + ' €';
-    return (row.due + row.rest).toFixed(2) + ' €';
+    if (row.until) return '✓ платено до ' + monthLabel(row.until) + (row.paid == null ? '' : (narrowAdm ? ' · пл. ' + Math.round(row.paid) : '  ·  платено ' + row.paid.toFixed(2) + ' €'));
+    var main = row.next > 0.005 ? 'следв. ' + row.next.toFixed(2) + ' €' : (row.due + row.rest).toFixed(2) + ' €';
+    if (row.paid == null) return main;
+    return main + (narrowAdm ? ' · пл. ' + Math.round(row.paid) : '  ·  платено ' + row.paid.toFixed(2) + ' €');
   }
   window.__adminChart = new Chart(ctx, {
     type: 'bar',
@@ -465,11 +519,13 @@ function drawAdminChart(d){
           label: st.label, data: list.map(st.get), backgroundColor: st.color, borderRadius: 3, borderSkipped: false,
           datalabels: {
             display: function(c){
+              if (list[c.dataIndex].until) return si === 0;
               if (!(c.dataset.data[c.dataIndex] > 0.005)) return false;
               for (var k = si + 1; k < sets.length; k++) { if (c.chart.data.datasets[k].data[c.dataIndex] > 0.005) return false; }
               return true;
             },
-            anchor: 'end', align: 'right', clamp: true, color: '#192166',
+            anchor: 'end', align: 'right', clamp: true,
+            color: function(c){ return list[c.dataIndex].until ? '#2f855a' : '#192166'; },
             font: { weight: '800', size: 12, family: 'Nunito Sans' },
             formatter: function(v, c){ return labelText(list[c.dataIndex]); }
           }
@@ -478,12 +534,15 @@ function drawAdminChart(d){
     },
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      layout: { padding: { right: 95 } },
+      layout: { padding: { right: narrowAdm ? 130 : 210 } },
       plugins: {
         legend: { display: true, position: 'bottom', labels: { boxWidth: 12, boxHeight: 12, color: '#192166', font: { size: 11, weight: '700' } } },
         tooltip: { callbacks: {
           label: function(c){ return c.dataset.label + ': ' + c.parsed.x.toFixed(2) + ' €'; },
-          afterLabel: function(c){ var r = list[c.dataIndex]; return (c.datasetIndex === 0 && r.due > 0.005 && r.rest > 0.005) ? 'от тях дължимо вече сега: ' + r.due.toFixed(2) + ' €' : ''; }
+          afterLabel: function(c){ var r = list[c.dataIndex], out = [];
+            if (c.datasetIndex === 0 && r.due > 0.005 && r.rest > 0.005) out.push('от тях дължимо вече сега: ' + r.due.toFixed(2) + ' €');
+            if (r.paid != null) out.push('платено досега: ' + r.paid.toFixed(2) + ' €');
+            return out; }
         } }
       },
       scales: {
@@ -510,24 +569,29 @@ function downloadDebtorsExcel(){
   var d = window.__lastData || {};
   // Excel съдържа ВСИЧКИ обекти (quarterAll), вкл. платилите напред — те са със сума 0 (показва се "-").
   // Резервен вариант за по-стар бекенд без quarterAll: само списъкът с длъжници.
-  var list = d.quarterAll || (d.quarterList || []).map(function(x){ return { unit: x.unit, amount: x.due + x.rest }; });
+  var list = d.quarterAll || (d.quarterList || []).map(function(x){ return { unit: x.unit, amount: x.due + x.rest, paid: x.paid }; });
   if (!list.length) { alert('Няма данни за сваляне.'); return; }
   var today = new Date();
   var stamp = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-  var rows = list.map(function(x){ return [x.unit, Math.round(x.amount * 100) / 100]; });
+  var covMap = {};
+  ((d.quarterCovered) || []).forEach(function(x){ covMap[x.unit] = monthLabel(x.until); });
+  var rows = list.map(function(x){ return [x.unit, Math.round(x.amount * 100) / 100, x.paid != null ? x.paid : 0, covMap[x.unit] || '']; });
   var btn = document.getElementById('dlExcelBtn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Подготвям…'; }
   function done(){ if (btn) { btn.disabled = false; btn.textContent = '⬇️ Свали Excel'; } }
   loadXlsx_().then(function(XLSX){
-    var aoa = [['Обект', 'Дължима сума (€)']].concat(rows);
+    var aoa = [['Обект', 'Дължима сума (€)', 'Платено досега (€)', 'Платено напред до']].concat(rows);
     var ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [{ wch: 26 }, { wch: 20 }];
-    for (var r = 2; r <= aoa.length; r++) { if (ws['B' + r]) ws['B' + r].z = '#,##0.00;(#,##0.00);-'; }
+    ws['!cols'] = [{ wch: 26 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
+    for (var r = 2; r <= aoa.length; r++) {
+      if (ws['B' + r]) ws['B' + r].z = '#,##0.00;(#,##0.00);-';
+      if (ws['C' + r]) ws['C' + r].z = '#,##0.00;(#,##0.00);-';
+    }
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Дължимо');
     XLSX.writeFile(wb, 'Dalzhimo_Suteren_' + stamp + '.xlsx');
   }).catch(function(){
-    var csv = '﻿Обект;Дължима сума (€)\r\n' + rows.map(function(r){ return r[0] + ';' + r[1].toFixed(2).replace('.', ','); }).join('\r\n');
+    var csv = '﻿Обект;Дължима сума (€);Платено досега (€);Платено напред до\r\n' + rows.map(function(r){ return r[0] + ';' + r[1].toFixed(2).replace('.', ',') + ';' + r[2].toFixed(2).replace('.', ',') + ';' + r[3]; }).join('\r\n');
     var a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     a.download = 'Dalzhimo_Suteren_' + stamp + '.csv';
@@ -716,14 +780,20 @@ function updateNavStuck_(){
 window.addEventListener('scroll', updateNavStuck_, { passive: true });
 window.addEventListener('resize', updateNavStuck_);
 
-function escapeHtml(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escapeHtml(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// Кратък запис на сума за оста/етикетите на графиката: 950 € / 17,1k €
+function shortEur_(v){
+  var a = Math.abs(Number(v) || 0);
+  var t = a >= 1000 ? (Math.round(a / 100) / 10).toString().replace('.', ',') + 'k' : String(Math.round(a));
+  return (v < 0 ? '-' : '') + t + ' €';
+}
 
 function buildPortalNavHtml_(isAdmin){
   return '<div class="portal-nav"><div class="portal-nav-inner">'
     + '<a href="#obekt" class="nav-pill">Моят обект</a>'
     + '<a href="#finansi" class="nav-pill">Финанси</a>'
     + (SHOW_PROTOCOLS ? '<a href="#arhiv" class="nav-pill">Архив</a>' : '')
-    + '<a href="#pomosht" class="nav-pill">Помощ</a>'
+    + ((SHOW_PHONES || SHOW_SIGNALS) ? '<a href="#pomosht" class="nav-pill">Помощ</a>' : '')
     + (isAdmin ? '<a href="#kvorum" class="nav-pill">Кворум</a>' : '')
     + '</div></div>';
 }
@@ -742,14 +812,58 @@ function render(d){
     return '<div class="b-breakdown"><span>ФРО: <b>' + fmt(fro) + '</b></span><span>ФУП: <b>' + fmt(fup) + '</b></span></div>';
   }
   var showBreakdown = (bbInc.fro || bbInc.tup || bbExp.fro || bbExp.tup);
-  var budgetHtml = '<div class="budget-grid">'
+  var budgetGridHtml = '<div class="budget-grid">'
     + '<div class="budget-card"><div class="b-label">Приходи</div><div class="b-val inc">' + fmt(totals.income) + '</div>' + (showBreakdown ? breakdownLines_(bbInc.fro, bbInc.tup) : '') + '</div>'
     + '<div class="budget-card"><div class="b-label">Разходи</div><div class="b-val exp">' + fmt(totals.expense) + '</div>' + (showBreakdown ? breakdownLines_(bbExp.fro, bbExp.tup) : '') + '</div>'
     + '<div class="budget-card"><div class="b-label">Каса</div><div class="b-val bal">' + fmt(totals.balance) + '</div>' + (showBreakdown ? breakdownLines_(bbBal.fro, bbBal.tup) : '') + '</div>'
-    + '</div>'
-    + (showBreakdown && bb.overrideUnits > 0
+    + '</div>';
+  var budgetNoteHtml = (showBreakdown && bb.overrideUnits > 0
         ? '<div class="breakdown-note">' + bb.overrideUnits + ' обект(а) с ръчно зададена лична такса са преброени изцяло във „ФУП" (не следват тарифната разбивка).</div>'
         : '');
+
+  // Втори ред карти: Събираемост (под „Приходи"), Дължимо (под „Разходи"), Прогноза (под „Каса").
+  // Всички са агрегати без имена; логиката е в Code.gs (collectionRate, totalOutstanding, buildForecast_).
+  var to = d.totalOutstanding, cr = d.collectionRate, fc = d.forecast;
+  var pctTxt = function(p){ return (p == null ? '—' : String(p).replace('.', ',') + ' %'); };
+  var twoLines_ = function(l1, v1, l2, v2){
+    return '<div class="b-breakdown"><span>' + l1 + ': <b>' + v1 + '</b></span><span>' + l2 + ': <b>' + v2 + '</b></span></div>';
+  };
+  // Събираемост: ЦЯЛОТО събрано (вкл. авансово платеното напред) / начисленото от началото до КРАЯ на текущото
+  // тримесечие. Годините — само при задържане (title).
+  var rateCardHtml = '';
+  if (cr && cr.pct != null) {
+    var rateCls = cr.pct >= 90 ? 'inc' : (cr.pct >= 75 ? 'due' : 'exp');
+    var allYears = (cr.years || []).map(function(y){ return y.year + ': ' + pctTxt(y.pct) + ' (' + fmt(y.collected) + ' от ' + fmt(y.charged) + ')'; });
+    if (cr.advanceNextYears > 0.005) allYears.push('Аванс за следващи години: ' + fmt(cr.advanceNextYears));
+    rateCardHtml = '<div class="budget-card budget-rate" title="' + escapeHtml(allYears.join('\n')) + '">'
+      + '<div class="b-label">Събираемост</div><div class="b-val ' + rateCls + '">' + pctTxt(cr.pct) + '</div>'
+      + twoLines_('Събрано', fmt(cr.collected), 'Начислено', fmt(cr.charged))
+      + '</div>';
+  }
+  // Дължимо — само до края на ТЕКУЩОТО тримесечие (без „следв.").
+  var dueCardHtml = '';
+  if (to) {
+    dueCardHtml = '<div class="budget-card budget-due">'
+      + '<div class="b-label">Дължимо</div><div class="b-val due">' + fmt(to.amount) + '</div>'
+      + twoLines_('ФРО', fmt(to.fro || 0), 'ФУП', fmt(to.fup || 0))
+      + '<div class="b-note">' + escapeHtml('до края на тримесечието (' + monthLabel(to.curEndKey) + ')') + '</div>'
+      + '</div>';
+  }
+  // Прогноза за следващата календарна година: резултат (приходи − разходи), ФРО/ФУП отдолу; детайли в title.
+  var fcCardHtml = '';
+  if (fc && fc.result) {
+    var sgn = function(v){ return (v > 0.005 ? '+' : '') + fmt(v); };
+    var fcTitle = 'Очаквани приходи: ' + fmt(fc.income.total) + ' (при ' + String(fc.collectionPct).replace('.', ',') + ' % събираемост)'
+      + '\nОчаквани разходи: ' + fmt(fc.expense.total) + ' (по последните 12 месеца + планирани ремонти)';
+    fcCardHtml = '<div class="budget-card budget-fc" title="' + escapeHtml(fcTitle) + '">'
+      + '<div class="b-label">Прогноза ' + escapeHtml(fc.year) + '</div>'
+      + '<div class="b-val ' + (fc.result.total >= 0 ? 'inc' : 'exp') + '">' + sgn(fc.result.total) + '</div>'
+      + twoLines_('ФРО', sgn(fc.result.fro), 'ФУП', sgn(fc.result.fup))
+      + '</div>';
+  }
+  var budgetDueRowHtml = (rateCardHtml || dueCardHtml || fcCardHtml)
+    ? '<div class="budget-due-row">' + rateCardHtml + dueCardHtml + fcCardHtml + '</div>' : '';
+  var budgetHtml = budgetGridHtml + budgetDueRowHtml + budgetNoteHtml;
 
   var yearly = yearlyFromTrend(d.budgetTrend);
   var yearlyRowsHtml = yearly.map(function(y){
@@ -931,6 +1045,7 @@ function render(d){
       + '</div></div>';
   }
 
+  var fullView = !!(FULL_VIEW_ROLE && d.isAdmin && d.role === FULL_VIEW_ROLE);
   document.getElementById('result').innerHTML = buildPortalNavHtml_(d.isAdmin)
     + '<div id="obekt">'
     + '<div class="unit-card">'
@@ -944,7 +1059,9 @@ function render(d){
     + '</div>'
     + statStripHtml
     + runwayHtml
-    + (d.isAdmin ? '<button class="admin-toggle" id="adminToggleBtn" onclick="toggleAdmin()">📊 Разширен изглед — задължения по тримесечия (' + escapeHtml(d.role) + ')</button>' : '')
+    + ((SHOW_QUARTER_VIEW_ALL || d.isAdmin) ? '<button class="admin-toggle" id="adminToggleBtn" onclick="toggleAdmin()" aria-expanded="false">'
+        + '<span>📊 Задължения по тримесечия — всички обекти</span>'
+        + '<span class="toggle-hint" id="adminToggleHint">Натисни, за да отвориш ▾</span></button>' : '')
     + '<div id="adminView" class="hidden"><div id="printSection">'
       + '<div class="print-date" id="printDate"></div>'
       + '<div class="admin-header"><h3>Задължения — Сутерен, Grand Azurro</h3>'
@@ -954,14 +1071,14 @@ function render(d){
       + '</div></div>'
     + '</div>'
     + '<div id="finansi">'
-    + '<div class="section"><div class="section-label">Прозрачност</div><div class="section-title">Топ длъжници <em style="color:var(--teal-deep);font-style:italic">(без имена)</em></div>'
+    + '<div class="section"><div class="section-label">Прозрачност</div><div class="section-title">Топ длъжници</div>'
       + '<div class="chart-card" id="debtorsCard"></div></div>'
     + '<div class="section"><div class="section-label">Финанси</div><div class="section-title">Бюджет на Сутерен</div>' + budgetHtml
-      + '<div class="section-title" style="margin-top:26px">Приходи и разходи по месеци</div>'
+      + ((SHOW_MONTHLY_CHART || SHOW_CASH_CHART || fullView) ? '<div class="section-title" style="margin-top:26px">Приходи и разходи по месеци</div>'
       + '<div style="font-size:12px;color:var(--muted);margin-top:-8px;margin-bottom:12px">Последните 12 месеца. Линията показва наличността в касата.</div>'
-      + '<div class="chart-card"><div class="chart-box"><canvas id="trendChart"></canvas></div></div>'
+      + '<div class="chart-card"><div class="chart-box"><canvas id="trendChart"></canvas></div></div>' : '')
     + '</div>'
-    + '<div class="section"><div class="section-label">Отчетност</div><div class="section-title">Годишен отчет</div>' + yearlyHtml + '</div>'
+    + ((SHOW_YEARLY || fullView) ? '<div class="section"><div class="section-label">Отчетност</div><div class="section-title">Годишен отчет</div>' + yearlyHtml + '</div>' : '')
     + '<div class="section"><div class="section-label">Дневник</div><div class="section-title">Разходи по отчети</div><div class="report-list">' + journalHtml + '</div></div>'
     + '</div>'
     + (SHOW_PROTOCOLS ? (
@@ -970,9 +1087,9 @@ function render(d){
         + '</div>'
       ) : '')
     + '<div id="pomosht">'
-    + '<div class="section"><div class="section-label">Помощ</div><div class="section-title">Важни телефони</div><div class="contact-card">' + contactsHtml + '</div></div>'
-    + '<div class="section"><div class="section-label">Поддръжка</div><div class="section-title">Сигнали за повреди</div>'
-      + '<div class="signal-card">' + signalsListWrapHtml + signalFormHtml + '</div></div>'
+    + (SHOW_PHONES ? '<div class="section"><div class="section-label">Помощ</div><div class="section-title">Важни телефони</div><div class="contact-card">' + contactsHtml + '</div></div>' : '')
+    + (SHOW_SIGNALS ? ('<div class="section"><div class="section-label">Поддръжка</div><div class="section-title">Сигнали за повреди</div>'
+      + '<div class="signal-card">' + signalsListWrapHtml + signalFormHtml + '</div></div>') : '')
     + '</div>'
     + quorumHtml
     + (d.isAdmin ? '<button class="export-btn" onclick="exportCsv()">📥 Изтегли всички данни (CSV)</button>' : '')
@@ -1001,8 +1118,12 @@ function drawCharts(d){
     debtorsCard.innerHTML = '<div class="chart-note">Няма обекти със задължения. 🎉</div>';
   }
 
-  var ctx2 = document.getElementById('trendChart').getContext('2d');
-  var fullTrend = d.budgetTrend || [];
+  var trendEl = document.getElementById('trendChart');
+  if (!trendEl) return; // графиката е скрита за този потребител (SHOW_MONTHLY_CHART / FULL_VIEW_ROLE)
+  var ctx2 = trendEl.getContext('2d');
+  // Месеци в бъдещето (напр. обобщен запис с дата 2027 г.) не се показват в графиката.
+  var nowD = new Date(), nowKey = nowD.getFullYear() + '-' + String(nowD.getMonth() + 1).padStart(2, '0');
+  var fullTrend = (d.budgetTrend || []).filter(function(x){ return x.month <= nowKey; });
   var runningCash = 0;
   var fullCash = fullTrend.map(function(x){ runningCash += (x.income - x.expense); return Math.round(runningCash * 100) / 100; });
   var trend = fullTrend.slice(-12);
@@ -1011,13 +1132,21 @@ function drawCharts(d){
   var labels = rawMonths.map(monthLabel);
   var incomeData = trend.map(function(x){ return x.income; });
   var expenseData = trend.map(function(x){ return -x.expense; });
+  // Етикети и на двете серии (приходи над стълба, разходи под него); grace на оста пази етикета в графиката.
+  function barLabelShow_(c){ return Math.abs(c.dataset.data[c.dataIndex]) > 0.5; }
+  function barLabelFont_(c){ return { size: c.chart.width < 480 ? 9 : 10, weight: '700' }; }
+  // На тесен екран — без „€", за да не се застъпват етикетите.
+  function barLabelFmt_(v, c){ var t = shortEur_(v); return c.chart.width < 480 ? t.replace(' €', '') : t; }
   new Chart(ctx2, {
     type: 'bar',
     data: {
       labels: labels,
       datasets: [
-        { type: 'bar', label: 'Приходи', data: incomeData, backgroundColor: green, borderRadius: 3, order: 2, yAxisID: 'y' },
-        { type: 'bar', label: 'Разходи', data: expenseData, backgroundColor: red, borderRadius: 3, order: 2, yAxisID: 'y' },
+        { type: 'bar', label: 'Приходи', data: incomeData, backgroundColor: green, borderRadius: 3, order: 2, yAxisID: 'y',
+          datalabels: { display: barLabelShow_, color: '#2b7a36', font: barLabelFont_, anchor: 'end', align: 'top', offset: 2, formatter: barLabelFmt_ } },
+        { type: 'bar', label: 'Разходи', data: expenseData, backgroundColor: red, borderRadius: 3, order: 2, yAxisID: 'y',
+          // При отрицателни стълбове datalabels брои "start" като долния край на стълба.
+          datalabels: { display: barLabelShow_, color: red, font: barLabelFont_, anchor: 'start', align: 'bottom', offset: 2, formatter: barLabelFmt_ } },
         { type: 'line', label: 'Каса (кумулативно)', data: cashData, borderColor: '#192166', backgroundColor: '#192166', borderWidth: 2, pointRadius: 0, tension: .25, order: 1, yAxisID: 'y1' }
       ]
     },
@@ -1043,8 +1172,8 @@ function drawCharts(d){
           },
           grid: { display: false }
         },
-        y: { stacked: true, position: 'left', ticks: { color: muted, font: { size: 11 }, callback: function(v){ return v + ' €'; } }, grid: { color: gridColor } },
-        y1: { position: 'right', ticks: { color: '#192166', font: { size: 10 }, callback: function(v){ return v + ' €'; } }, grid: { display: false } }
+        y: { stacked: true, position: 'left', grace: '15%', ticks: { color: muted, font: { size: 11 }, callback: function(v){ return shortEur_(v); } }, grid: { color: gridColor } },
+        y1: { position: 'right', grace: '15%', ticks: { color: '#192166', font: { size: 10 }, callback: function(v){ return shortEur_(v); } }, grid: { display: false } }
       }
     }
   });
