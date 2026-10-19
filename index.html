@@ -337,6 +337,7 @@ var SHOW_PHONES = false;
 // Админ списък по тримесечия: обектите, платени напред ("✓ платено до …"), са ВРЕМЕННО скрити от графиката, докато се проверят
 // (някои дати изглеждат нереални, напр. до Мар '29). Броят им се показва под графиката; Excel-ът ги съдържа. За показване: true.
 var SHOW_COVERED_IN_LIST = false;
+var SHOW_TOTAL_SHARE = false;  // „общо идеални части в Сутерен“ под кворума (скрито: сборът е 99.95% заради закръгляне)
 var SHOW_COVERED_NOTE = false; // бележка „Платили напред (N) са скрити“ под графиката
 
 function fmt(n){ return (Number(n)||0).toLocaleString('bg-BG',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €'; }
@@ -1040,7 +1041,7 @@ function render(d){
           + '<div class="quorum-bar-marker" style="left:33%" data-label="33%"></div>'
           + '<div class="quorum-bar-marker" style="left:67%" data-label="67%"></div></div>'
         + '<div class="quorum-note"><strong style="color:var(--text)">67%</strong> — редовен кворум по чл. 15, ал. 1 ЗУЕС. <strong style="color:var(--text)">33%</strong> важи само ако събранието вече е процедурно отложено с 1 час по чл. 15, ал. 2. Отметка на един обект отмята автоматично и другите обекти на същия собственик (по име); при различно изписано име се отмята ръчно.</div>'
-        + '<div class="quorum-count" id="quorumCount">0 от ' + d.quorumRoster.length + ' обекта отметнати' + (totalShareNum ? ' · общо идеални части в Сутерен: ' + totalShareNum.toFixed(2) + '%' : '') + '</div>'
+        + '<div class="quorum-count" id="quorumCount">0 от ' + d.quorumRoster.length + ' обекта отметнати' + (SHOW_TOTAL_SHARE && totalShareNum ? ' · общо идеални части в Сутерен: ' + totalShareNum.toFixed(2) + '%' : '') + '</div>'
         + '</div>'
       + '<div class="chart-card"><div class="quorum-list" id="quorumList">' + quorumRowsHtml + '</div>'
         + '<div class="quorum-actions"><button class="export-btn" onclick="resetQuorum()">↺ Нулирай всички</button></div>'
