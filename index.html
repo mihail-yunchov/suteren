@@ -352,6 +352,12 @@ function monthLabel(key){
   return names[Number(parts[1])-1] + " '" + parts[0].slice(2);
 }
 // "Окт – Дек 2026" / "Дек 2026 – Фев 2027" от два ключа "YYYY-MM" (за тримесечията)
+// Кратък вид на месец за "платено до": "2026-09" -> "9.'26"
+function monthShort_(key){
+  if (!key) return '';
+  var p = String(key).split('-'); if (p.length < 2) return '';
+  return Number(p[1]) + ".'" + p[0].slice(2);
+}
 function quarterLabel_(startKey, endKey){
   var names=['Яну','Фев','Мар','Апр','Май','Юни','Юли','Авг','Сеп','Окт','Ное','Дек'];
   var a = startKey.split('-'), b = endKey.split('-');
@@ -473,11 +479,11 @@ function drawAdminChart(d){
   if (d && d.quarterAll && d.quarterAll.length) {
     list = d.quarterAll.map(function(a){
       var q = qByUnit[a.unit];
-      if (q) return { unit: a.unit, due: q.due, rest: q.rest, next: q.next, paid: q.paid, until: null };
-      return { unit: a.unit, due: 0, rest: 0, next: 0, paid: a.paid, until: covByUnit[a.unit] || null };
+      if (q) return { unit: a.unit, due: q.due, rest: q.rest, next: q.next, paid: q.paid, paidThrough: q.paidThrough || a.paidThrough || null, until: null };
+      return { unit: a.unit, due: 0, rest: 0, next: 0, paid: a.paid, paidThrough: a.paidThrough || covByUnit[a.unit] || null, until: covByUnit[a.unit] || null };
     });
   } else {
-    list = qlist.map(function(q){ return { unit: q.unit, due: q.due, rest: q.rest, next: q.next, paid: q.paid, until: null }; });
+    list = qlist.map(function(q){ return { unit: q.unit, due: q.due, rest: q.rest, next: q.next, paid: q.paid, paidThrough: q.paidThrough || null, until: null }; });
   }
   var box = document.getElementById('allDebtorsBox');
   var covEl = document.getElementById('coveredNote');
@@ -512,7 +518,8 @@ function drawAdminChart(d){
     if (row.until) return '✓ платено до ' + monthLabel(row.until) + (row.paid == null ? '' : (narrowAdm ? ' · пл. ' + Math.round(row.paid) : '  ·  платено ' + row.paid.toFixed(2) + ' €'));
     var main = row.next > 0.005 ? 'следв. ' + row.next.toFixed(2) + ' €' : (row.due + row.rest).toFixed(2) + ' €';
     if (row.paid == null) return main;
-    return main + (narrowAdm ? ' · пл. ' + Math.round(row.paid) : '  ·  платено ' + row.paid.toFixed(2) + ' €');
+    var upto = row.paidThrough ? 'до ' + monthShort_(row.paidThrough) + ' · ' : (narrowAdm ? 'пл. ' : 'платено ');
+    return main + (narrowAdm ? ' · ' + upto + Math.round(row.paid) : '  ·  ' + upto + row.paid.toFixed(2) + ' €');
   }
   window.__adminChart = new Chart(ctx, {
     type: 'bar',
@@ -546,6 +553,7 @@ function drawAdminChart(d){
           afterLabel: function(c){ var r = list[c.dataIndex], out = [];
             if (c.datasetIndex === 0 && r.due > 0.005 && r.rest > 0.005) out.push('от тях дължимо вече сега: ' + r.due.toFixed(2) + ' €');
             if (r.paid != null) out.push('платено досега: ' + r.paid.toFixed(2) + ' €');
+            if (r.paidThrough) out.push('платено до: ' + monthShort_(r.paidThrough));
             return out; }
         } }
       },
@@ -577,16 +585,15 @@ function downloadDebtorsExcel(){
   if (!list.length) { alert('Няма данни за сваляне.'); return; }
   var today = new Date();
   var stamp = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-  var covMap = {};
-  ((d.quarterCovered) || []).forEach(function(x){ covMap[x.unit] = monthLabel(x.until); });
-  var rows = list.map(function(x){ return [x.unit, Math.round(x.amount * 100) / 100, x.paid != null ? x.paid : 0, covMap[x.unit] || '']; });
+  // "Платено до" = последният напълно покрит месец (за всички обекти; '—' = няма покрит месец).
+  var rows = list.map(function(x){ return [x.unit, Math.round(x.amount * 100) / 100, x.paid != null ? x.paid : 0, x.paidThrough ? monthShort_(x.paidThrough) : '—']; });
   var btn = document.getElementById('dlExcelBtn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Подготвям…'; }
   function done(){ if (btn) { btn.disabled = false; btn.textContent = '⬇️ Свали Excel'; } }
   loadXlsx_().then(function(XLSX){
-    var aoa = [['Обект', 'Дължима сума (€)', 'Платено досега (€)', 'Платено напред до']].concat(rows);
+    var aoa = [['Обект', 'Дължима сума (€)', 'Платено досега (€)', 'Платено до']].concat(rows);
     var ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [{ wch: 26 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
+    ws['!cols'] = [{ wch: 26 }, { wch: 20 }, { wch: 20 }, { wch: 14 }];
     for (var r = 2; r <= aoa.length; r++) {
       if (ws['B' + r]) ws['B' + r].z = '#,##0.00;(#,##0.00);-';
       if (ws['C' + r]) ws['C' + r].z = '#,##0.00;(#,##0.00);-';
@@ -595,7 +602,7 @@ function downloadDebtorsExcel(){
     XLSX.utils.book_append_sheet(wb, ws, 'Дължимо');
     XLSX.writeFile(wb, 'Dalzhimo_Suteren_' + stamp + '.xlsx');
   }).catch(function(){
-    var csv = '﻿Обект;Дължима сума (€);Платено досега (€);Платено напред до\r\n' + rows.map(function(r){ return r[0] + ';' + r[1].toFixed(2).replace('.', ',') + ';' + r[2].toFixed(2).replace('.', ',') + ';' + r[3]; }).join('\r\n');
+    var csv = '﻿Обект;Дължима сума (€);Платено досега (€);Платено до\r\n' + rows.map(function(r){ return r[0] + ';' + r[1].toFixed(2).replace('.', ',') + ';' + r[2].toFixed(2).replace('.', ',') + ';' + r[3]; }).join('\r\n');
     var a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     a.download = 'Dalzhimo_Suteren_' + stamp + '.csv';
