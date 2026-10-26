@@ -531,7 +531,9 @@ function drawAdminChart(d){
     if (lines.length === 1 && lines[0].length > maxCh + 4) lines[0] = lines[0].slice(0, maxCh + 3) + '…';
     return lines.length > 1 ? lines : lines[0];
   }
+  var isAdm = !!(d && d.isAdmin); // собствениците виждат само дължимото (без платено / платено до)
   function labelText(row){
+    if (!isAdm) return row.until ? '✓ платено' : (row.next > 0.005 ? 'следв. ' + row.next.toFixed(2) + ' €' : (row.due + row.rest).toFixed(2) + ' €');
     if (row.until) return '✓ платено до ' + monthLabel(row.until) + (row.paid == null ? '' : (narrowAdm ? ' · пл. ' + Math.round(row.paid) : '  ·  платено ' + row.paid.toFixed(2) + ' €'));
     var main = row.next > 0.005 ? 'следв. ' + row.next.toFixed(2) + ' €' : (row.due + row.rest).toFixed(2) + ' €';
     if (row.paid == null) return main;
@@ -570,8 +572,8 @@ function drawAdminChart(d){
           label: function(c){ return c.dataset.label + ': ' + c.parsed.x.toFixed(2) + ' €'; },
           afterLabel: function(c){ var r = list[c.dataIndex], out = [];
             if (c.datasetIndex === 0 && r.due > 0.005 && r.rest > 0.005) out.push('от тях дължимо вече сега: ' + r.due.toFixed(2) + ' €');
-            if (r.paid != null) out.push('платено досега: ' + r.paid.toFixed(2) + ' €');
-            if (r.paidThrough) out.push('платено до: ' + monthShort_(r.paidThrough));
+            if (isAdm && r.paid != null) out.push('платено досега: ' + r.paid.toFixed(2) + ' €');
+            if (isAdm && r.paidThrough) out.push('платено до: ' + monthShort_(r.paidThrough));
             return out; }
         } }
       },
@@ -1100,7 +1102,7 @@ function render(d){
     + '<div id="adminView" class="hidden"><div id="printSection">'
       + '<div class="print-date" id="printDate"></div>'
       + '<div class="admin-header"><h3>Задължения — Сутерен, Grand Azurro</h3>'
-      + '<div style="display:flex;gap:8px"><button class="print-btn" id="dlExcelBtn" onclick="downloadDebtorsExcel()">⬇️ Свали Excel</button><button class="admin-close" onclick="toggleAdmin()">Затвори</button></div></div>'
+      + '<div style="display:flex;gap:8px">' + (d.isAdmin ? '<button class="print-btn" id="dlExcelBtn" onclick="downloadDebtorsExcel()">⬇️ Свали Excel</button>' : '') + '<button class="admin-close" onclick="toggleAdmin()">Затвори</button></div></div>'
       + '<div class="chart-box" id="allDebtorsBox"><canvas id="allDebtorsChart"></canvas></div>'
       + '<div class="chart-note" id="coveredNote" style="font-size:11.5px;margin-top:10px;text-align:left"></div>'
       + '</div></div>'
