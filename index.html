@@ -514,6 +514,21 @@ function drawAdminChart(d){
   ];
   // Етикет: дължимо + колко е платено досега (на тесен екран — съкратено).
   var narrowAdm = box.clientWidth < 480;
+  // Дълги имена на обекти (напр. обединените на един собственик) — на най-много 2 реда; остатъкът е с "…", цялото име е в tooltip.
+  function wrapLabel_(name){
+    var maxCh = narrowAdm ? 13 : 26, toks = String(name).split(', '), lines = [], cur = '';
+    toks.forEach(function(t, i){
+      var piece = t + (i < toks.length - 1 ? ',' : '');
+      if (!cur) { cur = piece; }
+      else if ((cur + ' ' + piece).length <= maxCh) { cur += ' ' + piece; }
+      else { lines.push(cur); cur = piece; }
+    });
+    if (cur) lines.push(cur);
+    if (lines.length > 2) { var rest = lines.slice(1).join(' '); lines = [lines[0], rest]; }
+    if (lines.length === 2 && lines[1].length > maxCh) lines[1] = lines[1].slice(0, maxCh - 1).replace(/[,\s]+$/, '') + '…';
+    if (lines.length === 1 && lines[0].length > maxCh + 4) lines[0] = lines[0].slice(0, maxCh + 3) + '…';
+    return lines.length > 1 ? lines : lines[0];
+  }
   function labelText(row){
     if (row.until) return '✓ платено до ' + monthLabel(row.until) + (row.paid == null ? '' : (narrowAdm ? ' · пл. ' + Math.round(row.paid) : '  ·  платено ' + row.paid.toFixed(2) + ' €'));
     var main = row.next > 0.005 ? 'следв. ' + row.next.toFixed(2) + ' €' : (row.due + row.rest).toFixed(2) + ' €';
@@ -524,7 +539,7 @@ function drawAdminChart(d){
   window.__adminChart = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels: list.map(function(x){ return x.unit; }),
+      labels: list.map(function(x){ return wrapLabel_(x.unit); }),
       datasets: sets.map(function(st, si){
         return {
           label: st.label, data: list.map(st.get), backgroundColor: st.color, borderRadius: 3, borderSkipped: false,
@@ -549,6 +564,7 @@ function drawAdminChart(d){
       plugins: {
         legend: { display: true, position: 'bottom', labels: { boxWidth: 12, boxHeight: 12, color: '#192166', font: { size: 11, weight: '700' } } },
         tooltip: { callbacks: {
+          title: function(items){ return items.length ? list[items[0].dataIndex].unit : ''; },
           label: function(c){ return c.dataset.label + ': ' + c.parsed.x.toFixed(2) + ' €'; },
           afterLabel: function(c){ var r = list[c.dataIndex], out = [];
             if (c.datasetIndex === 0 && r.due > 0.005 && r.rest > 0.005) out.push('от тях дължимо вече сега: ' + r.due.toFixed(2) + ' €');
