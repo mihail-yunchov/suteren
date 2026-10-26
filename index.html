@@ -602,23 +602,30 @@ function downloadDebtorsExcel(){
   var today = new Date();
   var stamp = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
   // "Платено до" = последният напълно покрит месец (за всички обекти; '—' = няма покрит месец).
-  var rows = list.map(function(x){ return [x.unit, Math.round(x.amount * 100) / 100, x.paid != null ? x.paid : 0, x.paidThrough ? monthShort_(x.paidThrough) : '—']; });
+  // Колона „Собственик“ — само ако бекендът я е върнал (Касиер/Домоуправител); за обикновени собственици е без имена.
+  var hasOwner = list.some(function(x){ return x.owner !== undefined; });
+  var rows = list.map(function(x){
+    var base = [Math.round(x.amount * 100) / 100, x.paid != null ? x.paid : 0, x.paidThrough ? monthShort_(x.paidThrough) : '—'];
+    return hasOwner ? [x.unit, x.owner || ''].concat(base) : [x.unit].concat(base);
+  });
+  var head = hasOwner ? ['Обект', 'Собственик', 'Дължима сума (€)', 'Платено досега (€)', 'Платено до'] : ['Обект', 'Дължима сума (€)', 'Платено досега (€)', 'Платено до'];
+  var cAmt = hasOwner ? 'C' : 'B', cPaid = hasOwner ? 'D' : 'C', iAmt = hasOwner ? 2 : 1, iPaid = hasOwner ? 3 : 2;
   var btn = document.getElementById('dlExcelBtn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Подготвям…'; }
   function done(){ if (btn) { btn.disabled = false; btn.textContent = '⬇️ Свали Excel'; } }
   loadXlsx_().then(function(XLSX){
-    var aoa = [['Обект', 'Дължима сума (€)', 'Платено досега (€)', 'Платено до']].concat(rows);
+    var aoa = [head].concat(rows);
     var ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [{ wch: 26 }, { wch: 20 }, { wch: 20 }, { wch: 14 }];
+    ws['!cols'] = (hasOwner ? [{ wch: 26 }, { wch: 30 }] : [{ wch: 26 }]).concat([{ wch: 20 }, { wch: 20 }, { wch: 14 }]);
     for (var r = 2; r <= aoa.length; r++) {
-      if (ws['B' + r]) ws['B' + r].z = '#,##0.00;(#,##0.00);-';
-      if (ws['C' + r]) ws['C' + r].z = '#,##0.00;(#,##0.00);-';
+      if (ws[cAmt + r]) ws[cAmt + r].z = '#,##0.00;(#,##0.00);-';
+      if (ws[cPaid + r]) ws[cPaid + r].z = '#,##0.00;(#,##0.00);-';
     }
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Дължимо');
     XLSX.writeFile(wb, 'Dalzhimo_Suteren_' + stamp + '.xlsx');
   }).catch(function(){
-    var csv = '﻿Обект;Дължима сума (€);Платено досега (€);Платено до\r\n' + rows.map(function(r){ return r[0] + ';' + r[1].toFixed(2).replace('.', ',') + ';' + r[2].toFixed(2).replace('.', ',') + ';' + r[3]; }).join('\r\n');
+    var csv = '\uFEFF' + head.join(';') + '\r\n' + rows.map(function(r){ return r.map(function(v, i){ return (i === iAmt || i === iPaid) ? v.toFixed(2).replace('.', ',') : (i === 1 && hasOwner ? '"' + String(v).replace(/"/g, '""') + '"' : v); }).join(';'); }).join('\r\n');
     var a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     a.download = 'Dalzhimo_Suteren_' + stamp + '.csv';
