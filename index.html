@@ -977,7 +977,6 @@ function render(d){
     + '<div class="stat-chip' + (s.paidThisMonth === 0 ? ' warn' : '') + '">'
       + '<div class="stat-num">' + (s.paidThisMonth||0) + ' <span style="font-size:13px;color:var(--muted);font-weight:500">от ' + (s.totalUnits||0) + '</span></div>'
       + '<div class="stat-label">платени такси този месец</div>'
-      + '<div class="stat-info">Без имена — само по обект.</div>'
       + '</div>'
     + '<div class="stat-chip' + (s.debtorsCount > 0 ? ' warn' : '') + '">'
       + '<div class="stat-num">' + (s.debtorsCount||0) + ' <span style="font-size:13px;color:var(--muted);font-weight:500">от ' + (s.totalUnits||0) + '</span></div>'
@@ -1043,7 +1042,7 @@ function render(d){
       + '<button class="pay-copy alt" onclick="copyRef()">📋 Копирай</button></div>'
       + '<div class="pay-copied" id="payCopied">✅ IBAN копиран</div>'
       + '<div class="pay-copied" id="payRefCopied">✅ Основанието е копирано</div>'
-      + '<div class="pay-note">Задължително посочвай кода на обекта в основанието, за да се разпознае плащането. IBAN-ът е общ с Вход А на Grand Azurro — касите се водят разделно счетоводно.</div>'
+      + '<div class="pay-note">Задължително посочвай кода на обекта в основанието, за да се разпознае плащането.</div>'
       + '</div>';
   }
 
