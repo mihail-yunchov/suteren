@@ -599,6 +599,7 @@ function loadXlsx_(){
 }
 function downloadDebtorsExcel(){
   var d = window.__lastData || {};
+  if (!d.isAdmin) return; // само Касиер/Домоуправител
   // Excel съдържа ВСИЧКИ обекти (quarterAll), вкл. платилите напред — те са със сума 0 (показва се "-").
   // Резервен вариант за по-стар бекенд без quarterAll: само списъкът с длъжници.
   var list = d.quarterAll || (d.quarterList || []).map(function(x){ return { unit: x.unit, amount: x.due + x.rest, paid: x.paid }; });
@@ -1088,7 +1089,7 @@ function render(d){
     + '<div class="unit-card">'
       + '<div class="eyebrow-row"><div class="eyebrow">Твоят обект</div>' + updatedBadgeHtml + '</div>'
       + '<h2>' + escapeHtml(d.unit) + '</h2>'
-      + '<div class="type-badge">' + escapeHtml(d.unitType || '') + '</div>'
+      + (String(d.unitType || '').split(';')[0].split('+').length > 2 ? '' : '<div class="type-badge">' + escapeHtml(d.unitType || '') + '</div>') // при повече от 2 обекта типът не се показва (26.10.2026)
       + '<div class="due"><div class="due-left"><div class="due-label">Дължимо към момента</div>'
       + '<div class="due-meta">' + fmt(d.feePerMonth) + '/мес.</div></div>'
       + '<div class="due-amt ' + (due > 0 ? 'owe' : 'zero') + '">' + (due > 0 ? fmt(due) : 'Всичко платено') + '</div></div>'
