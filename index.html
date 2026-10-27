@@ -103,6 +103,7 @@
   .b-breakdown span{font-size:10.5px;color:var(--muted);font-weight:600}
   .b-breakdown span b{color:var(--text);font-weight:800}
   .b-breakdown span b{white-space:nowrap}
+  .b-breakdown span.b-sub{font-size:9.5px;font-weight:600;opacity:.8}
   @media (max-width:480px){.budget-due-row .b-breakdown span{font-size:9.5px}}
   .breakdown-note{font-size:11.5px;line-height:1.5;color:var(--muted);margin-top:10px}
   /* Втори ред карти: Събираемост | Дължимо | Прогноза (14.10.2026, като Вход А/Б) */
@@ -847,12 +848,13 @@ function render(d){
   // от трите карти — както при Вход А и Б. Показва се само ако бекендът връща budgetBreakdown.
   var bb = d.budgetBreakdown || {};
   var bbInc = bb.income || {}, bbExp = bb.expense || {}, bbBal = bb.balance || {};
-  function breakdownLines_(fro, fup, rent) {
-    return '<div class="b-breakdown"><span>ФРО: <b>' + fmt(fro) + '</b></span><span>' + (rent > 0.005 ? 'ФУП + наем' : 'ФУП') + ': <b>' + fmt(fup) + '</b></span></div>';
+  function breakdownLines_(fro, fup, rent, showRent) {
+    return '<div class="b-breakdown"><span>ФРО: <b>' + fmt(fro) + '</b></span><span>' + (rent > 0.005 ? 'ФУП + наем' : 'ФУП') + ': <b>' + fmt(fup) + '</b></span>'
+      + (showRent && rent > 0.005 ? '<span class="b-sub">(наем: ' + fmt(rent) + ')</span>' : '') + '</div>';
   }
   var showBreakdown = (bbInc.fro || bbInc.tup || bbInc.rent || bbExp.fro || bbExp.tup);
   var budgetGridHtml = '<div class="budget-grid">'
-    + '<div class="budget-card"><div class="b-label">Приходи</div><div class="b-val inc">' + fmt(totals.income) + '</div>' + (showBreakdown ? breakdownLines_(bbInc.fro, bbInc.tup, bbInc.rent) : '') + '</div>'
+    + '<div class="budget-card"><div class="b-label">Приходи</div><div class="b-val inc">' + fmt(totals.income) + '</div>' + (showBreakdown ? breakdownLines_(bbInc.fro, bbInc.tup, bbInc.rent, true) : '') + '</div>'
     + '<div class="budget-card"><div class="b-label">Разходи</div><div class="b-val exp">' + fmt(totals.expense) + '</div>' + (showBreakdown ? breakdownLines_(bbExp.fro, bbExp.tup) : '') + '</div>'
     + '<div class="budget-card"><div class="b-label">Каса</div><div class="b-val bal">' + fmt(totals.balance) + '</div>' + (showBreakdown ? breakdownLines_(bbBal.fro, bbBal.tup, bbBal.rent) : '') + '</div>'
     + '</div>';
