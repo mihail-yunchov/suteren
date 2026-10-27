@@ -847,14 +847,14 @@ function render(d){
   // от трите карти — както при Вход А и Б. Показва се само ако бекендът връща budgetBreakdown.
   var bb = d.budgetBreakdown || {};
   var bbInc = bb.income || {}, bbExp = bb.expense || {}, bbBal = bb.balance || {};
-  function breakdownLines_(fro, fup) {
-    return '<div class="b-breakdown"><span>ФРО: <b>' + fmt(fro) + '</b></span><span>ФУП: <b>' + fmt(fup) + '</b></span></div>';
+  function breakdownLines_(fro, fup, rent) {
+    return '<div class="b-breakdown"><span>ФРО: <b>' + fmt(fro) + '</b></span><span>' + (rent > 0.005 ? 'ФУП + наем' : 'ФУП') + ': <b>' + fmt(fup) + '</b></span></div>';
   }
-  var showBreakdown = (bbInc.fro || bbInc.tup || bbExp.fro || bbExp.tup);
+  var showBreakdown = (bbInc.fro || bbInc.tup || bbInc.rent || bbExp.fro || bbExp.tup);
   var budgetGridHtml = '<div class="budget-grid">'
-    + '<div class="budget-card"><div class="b-label">Приходи</div><div class="b-val inc">' + fmt(totals.income) + '</div>' + (showBreakdown ? breakdownLines_(bbInc.fro, bbInc.tup) : '') + '</div>'
+    + '<div class="budget-card"><div class="b-label">Приходи</div><div class="b-val inc">' + fmt(totals.income) + '</div>' + (showBreakdown ? breakdownLines_(bbInc.fro, bbInc.tup, bbInc.rent) : '') + '</div>'
     + '<div class="budget-card"><div class="b-label">Разходи</div><div class="b-val exp">' + fmt(totals.expense) + '</div>' + (showBreakdown ? breakdownLines_(bbExp.fro, bbExp.tup) : '') + '</div>'
-    + '<div class="budget-card"><div class="b-label">Каса</div><div class="b-val bal">' + fmt(totals.balance) + '</div>' + (showBreakdown ? breakdownLines_(bbBal.fro, bbBal.tup) : '') + '</div>'
+    + '<div class="budget-card"><div class="b-label">Каса</div><div class="b-val bal">' + fmt(totals.balance) + '</div>' + (showBreakdown ? breakdownLines_(bbBal.fro, bbBal.tup, bbBal.rent) : '') + '</div>'
     + '</div>';
   var budgetNoteHtml = (showBreakdown && bb.overrideUnits > 0
         ? '<div class="breakdown-note">' + bb.overrideUnits + ' обект(а) с ръчно зададена лична такса са преброени изцяло във „ФУП" (не следват тарифната разбивка).</div>'
@@ -897,7 +897,7 @@ function render(d){
     fcCardHtml = '<div class="budget-card budget-fc" title="' + escapeHtml(fcTitle) + '">'
       + '<div class="b-label">Прогноза ' + escapeHtml(fc.year) + '</div>'
       + '<div class="b-val ' + (fc.result.total >= 0 ? 'inc' : 'exp') + '">' + sgn(fc.result.total) + '</div>'
-      + twoLines_('ФРО', sgn(fc.result.fro), 'ФУП', sgn(fc.result.fup))
+      + twoLines_('ФРО', sgn(fc.result.fro), (fc.result.rent > 0.005 ? 'ФУП + наем' : 'ФУП'), sgn(fc.result.fup))
       + '</div>';
   }
   var budgetDueRowHtml = (rateCardHtml || dueCardHtml || fcCardHtml)
