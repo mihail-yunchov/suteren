@@ -1141,16 +1141,20 @@ function drawCharts(d){
 
   var debtorsCard = document.getElementById('debtorsCard');
   if (d.debtorsChart && d.debtorsChart.length) {
-    var maxVal1 = Math.max.apply(null, d.debtorsChart.map(function(x){ return x.due; }));
+    // Сума до края на текущото тримесечие (quarter от бекенда v1.11); при по-стар бекенд — дължимото към днес.
+    function debtAmt_(x){ return x.quarter != null ? x.quarter : x.due; }
+    var maxVal1 = Math.max.apply(null, d.debtorsChart.map(debtAmt_));
     var barsHtml = '<div class="debtor-bars">' + d.debtorsChart.map(function(x, i){
-      var pct = maxVal1 > 0 ? Math.max(4, Math.round(x.due / maxVal1 * 100)) : 0;
+      var pct = maxVal1 > 0 ? Math.max(4, Math.round(debtAmt_(x) / maxVal1 * 100)) : 0;
       var color = i < 3 ? red : amber;
       return '<div class="debtor-bar-row">'
         + '<div class="debtor-bar-id" title="' + escapeHtml(x.unit) + '">' + escapeHtml(x.unit) + '</div>'
         + '<div class="debtor-bar-track"><div class="debtor-bar-fill" style="width:' + pct + '%;background:' + color + '"></div></div>'
-        + '<div class="debtor-bar-sum">' + x.due.toFixed(2) + ' €</div>'
+        + '<div class="debtor-bar-sum">' + debtAmt_(x).toFixed(2) + ' €</div>'
         + '</div>';
-    }).join('') + '</div>';
+    }).join('') + '</div>'
+      + (d.debtorsChart[0] && d.debtorsChart[0].quarter != null && d.quarterPeriods && d.quarterPeriods.current
+          ? '<div class="debtor-bar-footnote">' + escapeHtml('Сума до края на тримесечието (' + monthLabel(d.quarterPeriods.current.endKey) + ')') + '</div>' : '');
     debtorsCard.innerHTML = barsHtml;
   } else {
     debtorsCard.innerHTML = '<div class="chart-note">Няма обекти със задължения. 🎉</div>';
