@@ -492,6 +492,7 @@ function drawAdminChart(d){
   var covEl = document.getElementById('coveredNote');
   var nPaid = list.filter(function(x){ return x.until; }).length;
   if (!SHOW_COVERED_IN_LIST) list = list.filter(function(x){ return !x.until; });
+  if (!(d && d.isAdmin)) list = list.filter(function(x){ return (x.due + x.rest) > 0.005; }); // собственици: само обекти със сума за текущото тримесечие
   if (covEl) {
     // Бележката е скрита (19.10.2026). За показване на броя на скритите: SHOW_COVERED_NOTE = true.
     covEl.innerHTML = !SHOW_COVERED_NOTE ? ''
@@ -501,7 +502,7 @@ function drawAdminChart(d){
   }
   if (window.__adminChart) { window.__adminChart.destroy(); window.__adminChart = null; }
   if (!list.length) {
-    box.innerHTML = '<div class="chart-note" style="padding:30px 0">Няма обекти със задължения за текущото и следващото тримесечие. 🎉</div>';
+    box.innerHTML = '<div class="chart-note" style="padding:30px 0">Няма обекти със задължения за текущото тримесечие. 🎉</div>';
     return;
   }
   var qp = d.quarterPeriods || {};
@@ -510,10 +511,10 @@ function drawAdminChart(d){
   box.innerHTML = '<canvas id="allDebtorsChart"></canvas>';
   box.style.height = Math.max(300, 34 * list.length + 40) + 'px';
   var ctx = document.getElementById('allDebtorsChart').getContext('2d');
-  var maxVal = Math.max.apply(null, list.map(function(x){ return x.due + x.rest + x.next; }));
+  var maxVal = Math.max.apply(null, list.map(function(x){ return x.due + x.rest; }));
+  // Само текущото тримесечие (27.10.2026): „следв.“ / следващото тримесечие вече не се показват в графиката.
   var sets = [
-    { label: 'Тримесечие ' + curTxt, color: '#d97706', get: function(x){ return x.due + x.rest; } },
-    { label: 'Следващо ' + nextTxt, color: '#1fb5c3', get: function(x){ return x.next; } }
+    { label: 'Тримесечие ' + curTxt, color: '#d97706', get: function(x){ return x.due + x.rest; } }
   ];
   // Етикет: дължимо + колко е платено досега (на тесен екран — съкратено).
   var narrowAdm = box.clientWidth < 480;
@@ -534,12 +535,13 @@ function drawAdminChart(d){
   }
   var isAdm = !!(d && d.isAdmin); // собствениците виждат само дължимото (без платено / платено до)
   function labelText(row){
-    if (!isAdm) return row.until ? '✓ платено' : (row.next > 0.005 ? 'следв. ' + row.next.toFixed(2) + ' €' : (row.due + row.rest).toFixed(2) + ' €');
+    if (!isAdm) return row.until ? '✓ платено' : (row.due + row.rest).toFixed(2) + ' €';
     if (row.until) return '✓ платено до ' + monthLabel(row.until) + (row.paid == null ? '' : (narrowAdm ? ' · пл. ' + Math.round(row.paid) : '  ·  платено ' + row.paid.toFixed(2) + ' €'));
-    var main = row.next > 0.005 ? 'следв. ' + row.next.toFixed(2) + ' €' : (row.due + row.rest).toFixed(2) + ' €';
-    if (row.paid == null) return main;
+    var amt = row.due + row.rest, main = amt > 0.005 ? amt.toFixed(2) + ' €' : '';
+    if (row.paid == null) return main || '—';
     var upto = row.paidThrough ? 'до ' + monthShort_(row.paidThrough) + ' · ' : (narrowAdm ? 'пл. ' : 'платено ');
-    return main + (narrowAdm ? ' · ' + upto + Math.round(row.paid) : '  ·  ' + upto + row.paid.toFixed(2) + ' €');
+    var tail = narrowAdm ? upto + Math.round(row.paid) : upto + row.paid.toFixed(2) + ' €';
+    return main ? main + (narrowAdm ? ' · ' : '  ·  ') + tail : tail; // без сума за тримесечието → само „до кога“ и колко е платено
   }
   window.__adminChart = new Chart(ctx, {
     type: 'bar',
@@ -550,9 +552,8 @@ function drawAdminChart(d){
           label: st.label, data: list.map(st.get), backgroundColor: st.color, borderRadius: 3, borderSkipped: false,
           datalabels: {
             display: function(c){
-              if (list[c.dataIndex].until) return si === 0;
-              if (!(c.dataset.data[c.dataIndex] > 0.005)) return false;
-              for (var k = si + 1; k < sets.length; k++) { if (c.chart.data.datasets[k].data[c.dataIndex] > 0.005) return false; }
+              if (list[c.dataIndex].until) return true;
+              if (!(c.dataset.data[c.dataIndex] > 0.005)) return isAdm; // нулева сума: само за админ — „до кога“ и колко е платено
               return true;
             },
             anchor: 'end', align: 'right', clamp: true,
