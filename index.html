@@ -1062,10 +1062,8 @@ function render(d){
     var payNow = new Date();
     var payQEnd = (d.quarter && /^\d{4}-\d{2}$/.test(String(d.quarter.endKey || ''))) ? String(d.quarter.endKey).slice(5, 7) + '.' + String(d.quarter.endKey).slice(0, 4)
       : String((Math.floor(payNow.getMonth() / 3) + 1) * 3).padStart(2, '0') + '.' + payNow.getFullYear();
-    var payTypeBase = String(d.unitType || '');
-    var payTypeTxt = (payTypeBase && payTypeBase.indexOf(';') === -1 && payTypeBase.split('+').length <= 2) ? ' (' + payTypeBase + ')' : '';
     var paySuffix = ' — входна такса Сутерен до края на тримесечието (' + payQEnd + ')';
-    var payRef = String(d.unit) + payTypeTxt + paySuffix;
+    var payRef = String(d.unit) + paySuffix;
     if (payRef.length > 140) payRef = String(d.unit).slice(0, 140 - paySuffix.length - 1) + '…' + paySuffix; // лимит на основанието в банките (140 знака)
     payBoxHtml = '<div class="pay-box"><div class="pay-heading">Как да платя</div>'
       + '<div class="pay-field"><div class="pay-field-main"><div class="pay-label">IBAN за такси</div><div class="pay-val" id="payIban">' + escapeHtml(d.bankIban) + '</div></div>'
