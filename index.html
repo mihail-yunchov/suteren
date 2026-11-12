@@ -966,7 +966,7 @@ function render(d){
     var linkHtml = (p.link && /^https?:\/\//.test(p.link)) ? '<div style="margin-top:12px"><a href="' + escapeHtml(p.link) + '" target="_blank" rel="noopener" style="color:var(--teal-deep);font-weight:700">Свали протокол ↗</a></div>' : '';
     var dt = new Date(p.date); var yr = isNaN(dt.getTime()) ? '' : dt.getFullYear();
     var typeCls = protoTypeClassMap[p.type] || 'regular';
-    return '<details class="proto-card proto-row show" data-year="' + yr + '"' + (i === 0 ? ' open' : '') + '><summary><div class="j-left"><strong>Общо събрание — ' + escapeHtml(formatDateShort(p.date)) + '</strong>'
+    return '<details class="proto-card proto-row show" data-year="' + yr + '"><summary><div class="j-left"><strong>Общо събрание — ' + escapeHtml(formatDateShort(p.date)) + '</strong>'
       + '<span class="j-date"><span class="proto-type-chip ' + typeCls + '" style="margin-left:0">' + escapeHtml(p.type) + '</span></span></div></summary>'
       + '<div class="proto-body">'
       + (p.topics ? '<div class="proto-h">Дневен ред</div><div class="proto-text">' + escapeHtml(p.topics) + '</div>' : '')
