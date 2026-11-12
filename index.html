@@ -1058,7 +1058,15 @@ function render(d){
 
   var payBoxHtml = '';
   if (due > 0 && d.bankIban && d.bankIban.toUpperCase().indexOf('ПОПЪЛНИ') === -1) {
-    var payRef = d.unit + ' — входна такса Сутерен';
+    // Основание: обект (+тип, ако е кратко) и периодът — до края на тримесечието (таксите се плащат на тримесечия).
+    var payNow = new Date();
+    var payQEnd = (d.quarter && /^\d{4}-\d{2}$/.test(String(d.quarter.endKey || ''))) ? String(d.quarter.endKey).slice(5, 7) + '.' + String(d.quarter.endKey).slice(0, 4)
+      : String((Math.floor(payNow.getMonth() / 3) + 1) * 3).padStart(2, '0') + '.' + payNow.getFullYear();
+    var payTypeBase = String(d.unitType || '');
+    var payTypeTxt = (payTypeBase && payTypeBase.indexOf(';') === -1 && payTypeBase.split('+').length <= 2) ? ' (' + payTypeBase + ')' : '';
+    var paySuffix = ' — входна такса Сутерен до края на тримесечието (' + payQEnd + ')';
+    var payRef = String(d.unit) + payTypeTxt + paySuffix;
+    if (payRef.length > 140) payRef = String(d.unit).slice(0, 140 - paySuffix.length - 1) + '…' + paySuffix; // лимит на основанието в банките (140 знака)
     payBoxHtml = '<div class="pay-box"><div class="pay-heading">Как да платя</div>'
       + '<div class="pay-field"><div class="pay-field-main"><div class="pay-label">IBAN за такси</div><div class="pay-val" id="payIban">' + escapeHtml(d.bankIban) + '</div></div>'
       + '<button class="pay-copy" onclick="copyIban()">📋 Копирай</button></div>'
@@ -1066,7 +1074,7 @@ function render(d){
       + '<button class="pay-copy alt" onclick="copyRef()">📋 Копирай</button></div>'
       + '<div class="pay-copied" id="payCopied">✅ IBAN копиран</div>'
       + '<div class="pay-copied" id="payRefCopied">✅ Основанието е копирано</div>'
-      + '<div class="pay-note">Задължително посочвай кода на обекта в основанието, за да се разпознае плащането.</div>'
+      + '<div class="pay-note">Задължително посочвай кода на обекта и периода в основанието, за да се разпознае плащането.</div>'
       + '</div>';
   }
 
