@@ -988,7 +988,10 @@ function render(d){
   var quarterChipHtml = '';
   if (d.quarter && d.quarter.startKey) {
     var q = d.quarter, qLabel = quarterLabel_(q.startKey, q.endKey);
-    if (q.covered) {
+    // Обект с такса 0 (напр. мазе/склад от 10.2026) няма реално „платено до“ → балончето не се показва (беше подвеждащо: „до Мар 2027“).
+    if (q.covered && !(Number(d.feePerMonth) > 0)) {
+      quarterChipHtml = '';
+    } else if (q.covered) {
       quarterChipHtml = '<div class="stat-chip full"><div class="stat-num" style="color:var(--green,#3d9e4a)">✓</div>'
         + '<div class="stat-info"><strong style="color:var(--text)">Тримесечия — платено</strong> — текущото и следващото тримесечие (до ' + escapeHtml(quarterLabel_(q.endKey, q.endKey).split(' – ')[1]) + ') са покрити.</div></div>';
     } else {
