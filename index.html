@@ -363,11 +363,11 @@ function monthLabel(key){
   return names[Number(parts[1])-1] + " '" + parts[0].slice(2);
 }
 // "Окт – Дек 2026" / "Дек 2026 – Фев 2027" от два ключа "YYYY-MM" (за тримесечията)
-// Кратък вид на месец за "платено до": "2026-09" -> "9.'26"
+// Кратък вид на месец за "платено до": "2026-09" -> "9.26"
 function monthShort_(key){
   if (!key) return '';
   var p = String(key).split('-'); if (p.length < 2) return '';
-  return Number(p[1]) + ".'" + p[0].slice(2);
+  return Number(p[1]) + "." + p[0].slice(2);
 }
 function quarterLabel_(startKey, endKey){
   var names=['Яну','Фев','Мар','Апр','Май','Юни','Юли','Авг','Сеп','Окт','Ное','Дек'];
@@ -632,11 +632,17 @@ function downloadDebtorsExcel(){
   });
   var head = hasOwner ? ['Обект', 'Собственик', 'Дължима сума (€)', 'Платено досега (€)', 'Платено до'] : ['Обект', 'Дължима сума (€)', 'Платено досега (€)', 'Платено до'];
   var cAmt = hasOwner ? 'C' : 'B', cPaid = hasOwner ? 'D' : 'C', iAmt = hasOwner ? 2 : 1, iPaid = hasOwner ? 3 : 2;
+  var ptIdx = hasOwner ? 4 : 3;
   var btn = document.getElementById('dlExcelBtn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Подготвям…'; }
   function done(){ if (btn) { btn.disabled = false; btn.textContent = '⬇️ Свали Excel'; } }
   loadXlsx_().then(function(XLSX){
-    var aoa = [head].concat(rows);
+    // „Платено до“ в Excel = истинска дата (последен ден на месеца) с формат м.гг → показва се "6.26", но се сортира/филтрира като дата.
+    var aoa = [head].concat(rows.map(function(r, ri){
+      var c = r.slice(), k = list[ri].paidThrough, p = k ? String(k).split('-') : [];
+      if (p.length >= 2 && Number(p[0]) && Number(p[1])) c[ptIdx] = { t: 'n', v: Date.UTC(Number(p[0]), Number(p[1]), 0) / 86400000 + 25569, z: 'm.yy' };
+      return c;
+    }));
     var ws = XLSX.utils.aoa_to_sheet(aoa);
     ws['!cols'] = (hasOwner ? [{ wch: 26 }, { wch: 30 }] : [{ wch: 26 }]).concat([{ wch: 20 }, { wch: 20 }, { wch: 14 }]);
     for (var r = 2; r <= aoa.length; r++) {
@@ -647,7 +653,7 @@ function downloadDebtorsExcel(){
     XLSX.utils.book_append_sheet(wb, ws, 'Дължимо');
     XLSX.writeFile(wb, 'Dalzhimo_Suteren_' + stamp + '.xlsx');
   }).catch(function(){
-    var csv = '\uFEFF' + head.join(';') + '\r\n' + rows.map(function(r){ return r.map(function(v, i){ return (i === iAmt || i === iPaid) ? v.toFixed(2).replace('.', ',') : (i === 1 && hasOwner ? '"' + String(v).replace(/"/g, '""') + '"' : v); }).join(';'); }).join('\r\n');
+    var csv = '\uFEFF' + head.join(';') + '\r\n' + rows.map(function(r){ return r.map(function(v, i){ return (i === iAmt || i === iPaid) ? v.toFixed(2).replace('.', ',') : (i === 1 && hasOwner ? '"' + String(v).replace(/"/g, '""') + '"' : (i === ptIdx && /^\d+\.\d+$/.test(String(v)) ? '="' + v + '"' : v)); }).join(';'); }).join('\r\n');
     var a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     a.download = 'Dalzhimo_Suteren_' + stamp + '.csv';
