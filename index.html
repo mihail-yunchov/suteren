@@ -360,7 +360,7 @@ function fmtOrDash(n, title){
 if (window.ChartDataLabels) { Chart.register(ChartDataLabels); }
 function monthLabel(key){
   var parts = key.split('-'); var names=['Яну','Фев','Мар','Апр','Май','Юни','Юли','Авг','Сеп','Окт','Ное','Дек'];
-  return names[Number(parts[1])-1] + " '" + parts[0].slice(2);
+  return names[Number(parts[1])-1] + " " + parts[0].slice(2);
 }
 // "Окт – Дек 2026" / "Дек 2026 – Фев 2027" от два ключа "YYYY-MM" (за тримесечията)
 // Кратък вид на месец за "платено до": "2026-09" -> "9.26"
@@ -983,26 +983,15 @@ function render(d){
     ? '<div class="report-list">' + protocolsHtml + '</div>'
     : '<div style="color:var(--muted);font-size:13px">Все още няма качени решения.</div>');
 
-  // Задължение за тримесечие (по решение на ОС таксите се плащат на тримесечия) — логиката е в бекенда
-  // (quarterObligation_). Показва остатъка до края на текущото тримесечие, а ако е платено — следващото.
-  var quarterChipHtml = '';
+  // Една сума в картата на обекта (по искане на домоуправителя, 17.11.2026): дължимо до края на текущото тримесечие
+  // (логиката е в бекенда — quarterObligation_). Ако текущото е платено — сумата за следващото; ако и то е платено — 0.
+  // Старият „Дължимо към момента“ и долното балонче с тримесечието са махнати. Без d.quarter (напр. админ профил) — старата сума.
+  var dueShown = due, dueLabel = 'Дължимо към момента', dueMetaPrefix = '';
   if (d.quarter && d.quarter.startKey) {
-    var q = d.quarter, qLabel = quarterLabel_(q.startKey, q.endKey);
-    // Обект с такса 0 (напр. мазе/склад от 10.2026) няма реално „платено до“ → балончето не се показва (беше подвеждащо: „до Мар 2027“).
-    if (q.covered && !(Number(d.feePerMonth) > 0)) {
-      quarterChipHtml = '';
-    } else if (q.covered) {
-      quarterChipHtml = '<div class="stat-chip full"><div class="stat-num" style="color:var(--green,#3d9e4a)">✓</div>'
-        + '<div class="stat-info"><strong style="color:var(--text)">Тримесечия — платено</strong> — текущото и следващото тримесечие (до ' + escapeHtml(quarterLabel_(q.endKey, q.endKey).split(' – ')[1]) + ') са покрити.</div></div>';
-    } else {
-      var qTitle = q.isNext ? 'Следващо тримесечие (' + qLabel + ')' : 'До края на тримесечието (' + qLabel + ')';
-      var qDesc = q.isNext
-        ? 'текущото тримесечие е платено; това е сумата за следващото (без вече направени авансови плащания).'
-        : 'дължимото към момента (' + fmt(q.dueNow) + ') плюс оставащите месеци до края на тримесечието.';
-      quarterChipHtml = '<div class="stat-chip full' + (!q.isNext && q.dueNow > 0 ? ' warn' : '') + '">'
-        + '<div class="stat-num">' + fmt(q.amount) + '</div>'
-        + '<div class="stat-info"><strong style="color:var(--text)">' + qTitle + '</strong> — ' + qDesc + '</div></div>';
-    }
+    var qd = d.quarter, qdLabel = quarterLabel_(qd.startKey, qd.endKey);
+    dueShown = qd.covered ? 0 : (Number(qd.amount) || 0);
+    dueLabel = (qd.isNext && !qd.covered) ? 'Следващо тримесечие (текущото е платено)' : 'Дължимо до края на тримесечието';
+    dueMetaPrefix = qd.covered ? '' : qdLabel + ' · ';
   }
 
   var s = d.stats || {};
@@ -1016,7 +1005,6 @@ function render(d){
       + '<div class="stat-label">обекти със задължение</div>'
       + '<div class="stat-info">Общо за Сутерен, не само твоят обект.</div>'
       + '</div>'
-    + quarterChipHtml
     + '</div>';
 
   var runwayHtml = '';
@@ -1066,7 +1054,7 @@ function render(d){
   var updatedBadgeHtml = lastUpdatedText ? '<div class="updated-badge"><span class="dot"></span>Обновено ' + escapeHtml(lastUpdatedText) + '</div>' : '<span></span>';
 
   var payBoxHtml = '';
-  if (due > 0 && d.bankIban && d.bankIban.toUpperCase().indexOf('ПОПЪЛНИ') === -1) {
+  if (dueShown > 0.005 && d.bankIban && d.bankIban.toUpperCase().indexOf('ПОПЪЛНИ') === -1) {
     // Основание: обект (+тип, ако е кратко) и периодът — до края на тримесечието (таксите се плащат на тримесечия).
     var payNow = new Date();
     var payQEnd = (d.quarter && /^\d{4}-\d{2}$/.test(String(d.quarter.endKey || ''))) ? String(d.quarter.endKey).slice(5, 7) + '.' + String(d.quarter.endKey).slice(0, 4)
@@ -1126,9 +1114,9 @@ function render(d){
       + '<div class="eyebrow-row"><div class="eyebrow">Твоят обект</div>' + updatedBadgeHtml + '</div>'
       + '<h2>' + escapeHtml(d.unit) + '</h2>'
       + (String(d.unitType || '').split(';')[0].split('+').length > 2 ? '' : '<div class="type-badge">' + escapeHtml(d.unitType || '') + '</div>') // при повече от 2 обекта типът не се показва (26.10.2026)
-      + '<div class="due"><div class="due-left"><div class="due-label">Дължимо към момента</div>'
-      + '<div class="due-meta">' + fmt(d.feePerMonth) + '/мес.</div></div>'
-      + '<div class="due-amt ' + (due > 0 ? 'owe' : 'zero') + '">' + (due > 0 ? fmt(due) : 'Всичко платено') + '</div></div>'
+      + '<div class="due"><div class="due-left"><div class="due-label">' + escapeHtml(dueLabel) + '</div>'
+      + '<div class="due-meta">' + escapeHtml(dueMetaPrefix) + fmt(d.feePerMonth) + '/мес.</div></div>'
+      + '<div class="due-amt ' + (dueShown > 0.005 ? 'owe' : 'zero') + '">' + (dueShown > 0.005 ? fmt(dueShown) : 'Всичко платено') + '</div></div>'
       + payBoxHtml
     + '</div>'
     + statStripHtml
