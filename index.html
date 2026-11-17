@@ -983,15 +983,15 @@ function render(d){
     ? '<div class="report-list">' + protocolsHtml + '</div>'
     : '<div style="color:var(--muted);font-size:13px">Все още няма качени решения.</div>');
 
-  // Една сума в картата на обекта (по искане на домоуправителя, 17.11.2026): дължимо до края на текущото тримесечие
-  // (логиката е в бекенда — quarterObligation_). Ако текущото е платено — сумата за следващото; ако и то е платено — 0.
-  // Старият „Дължимо към момента“ и долното балонче с тримесечието са махнати. Без d.quarter (напр. админ профил) — старата сума.
+  // Една сума в картата на обекта (по искане на домоуправителя, 17.11.2026): дължимо до края на ТЕКУЩОТО тримесечие
+  // (логиката е в бекенда — quarterObligation_). Ако текущото тримесечие е платено — „Всичко платено“ (сумата за следващото
+  // тримесечие не се показва тук; появява се като дължима, щом започне). Без d.quarter (напр. админ профил) — старата сума.
   var dueShown = due, dueLabel = 'Дължимо към момента', dueMetaPrefix = '';
   if (d.quarter && d.quarter.startKey) {
-    var qd = d.quarter, qdLabel = quarterLabel_(qd.startKey, qd.endKey);
-    dueShown = qd.covered ? 0 : (Number(qd.amount) || 0);
-    dueLabel = (qd.isNext && !qd.covered) ? 'Следващо тримесечие (текущото е платено)' : 'Дължимо до края на тримесечието';
-    dueMetaPrefix = qd.covered ? '' : qdLabel + ' · ';
+    var qd = d.quarter, qcur = (d.quarterPeriods && d.quarterPeriods.current) || (!qd.isNext ? { startKey: qd.startKey, endKey: qd.endKey } : null);
+    dueShown = (qd.covered || qd.isNext) ? 0 : (Number(qd.amount) || 0);
+    dueLabel = 'Дължимо до края на тримесечието';
+    dueMetaPrefix = qcur ? quarterLabel_(qcur.startKey, qcur.endKey) + ' · ' : '';
   }
 
   var s = d.stats || {};
