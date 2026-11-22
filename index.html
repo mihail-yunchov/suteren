@@ -106,6 +106,7 @@
   .b-breakdown span.b-sub{font-size:9.5px;font-weight:600;opacity:.8}
   @media (max-width:480px){.budget-due-row .b-breakdown span{font-size:9.5px}}
   .breakdown-note{font-size:11.5px;line-height:1.5;color:var(--muted);margin-top:10px}
+  .admin-note{font-size:11.5px;color:#8a5205;background:var(--amber-tint);border:1px solid rgba(217,119,6,.3);border-radius:10px;padding:9px 12px;margin-top:8px;line-height:1.5;text-align:left}
   /* Втори ред карти: Събираемост | Дължимо | Прогноза (14.10.2026, като Вход А/Б) */
   .budget-due-row{display:grid;grid-template-columns:repeat(3, minmax(0,1fr));gap:8px;margin-top:8px}
   .b-val.due{color:var(--amber)}
@@ -932,6 +933,21 @@ function render(d){
   var budgetDueRowHtml = (rateCardHtml || dueCardHtml || fcCardHtml)
     ? '<div class="budget-due-row">' + rateCardHtml + dueCardHtml + fcCardHtml + '</div>' : '';
   var budgetHtml = budgetGridHtml + budgetDueRowHtml + budgetNoteHtml;
+  // (22.11.2026) Диагностика само за Касиер/Домоуправител: редове с BGN след еврото и "Проблеми в данните"
+  // (dataIssues) от бекенда. Текстът идва от таблицата — escape-ва се.
+  if (d.isAdmin) {
+    var admNotes = [];
+    if (d.bgnAfterEuro && d.bgnAfterEuro.budget) {
+      admNotes.push('Редове в БЮДЖЕТ с валута <b>BGN</b> и дата от 01.01.2026 нататък: <b>' + d.bgnAfterEuro.budget + '</b>. Сумите им се делят на 1,95583. Ако разходът е в евро, смени валутата на <b>EUR</b>.');
+    }
+    if (d.dataIssues && d.dataIssues.length) {
+      admNotes.push('<b>Проблеми в данните (' + d.dataIssues.length + ')</b> — оправи ги в таблицата:'
+        + '<div style="margin-top:4px">' + d.dataIssues.map(function(t){ return '• ' + escapeHtml(t); }).join('<br>') + '</div>');
+    }
+    admNotes.forEach(function(t){
+      budgetHtml += '<div class="admin-note">⚠️ ' + t + ' <span style="opacity:.75">(виждат само Касиер/Домоуправител)</span></div>';
+    });
+  }
 
   var yearly = yearlyFromTrend(d.budgetTrend);
   var yearlyRowsHtml = yearly.map(function(y){
