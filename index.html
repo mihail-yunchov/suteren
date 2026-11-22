@@ -11,9 +11,40 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Сутерен">
 <title>Сутерен — Grand Azurro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://script.google.com" crossorigin>
+<link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,600&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" integrity="sha512-CQBWl4fJHWbryGE+Pc7UAxWMUMNMWzWxF4SQo9CgkJIN1kx6djDQZjh3Y8SZ1d+6I+1zze6Z7kHXO7q3UyZAWw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js" integrity="sha512-JPcRR8yFa8mmCsfrw4TNte1ZvF1e3+1SdGMslZvmrzDYxS69J7J49vkFL8u6u8PlPJK+H3voElBtUCzaXj+6ig==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<!-- Chart.js се зарежда само при нужда (виж loadCharts_) — собствениците, които гледат само картата си, не го теглят. -->
+<script>
+var LIBS = {
+  chart: { src: 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js', sri: 'sha512-CQBWl4fJHWbryGE+Pc7UAxWMUMNMWzWxF4SQo9CgkJIN1kx6djDQZjh3Y8SZ1d+6I+1zze6Z7kHXO7q3UyZAWw==' },
+  datalabels: { src: 'https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js', sri: 'sha512-JPcRR8yFa8mmCsfrw4TNte1ZvF1e3+1SdGMslZvmrzDYxS69J7J49vkFL8u6u8PlPJK+H3voElBtUCzaXj+6ig==' },
+  xlsx: { src: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', sri: 'sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA==' }
+};
+// Външен скрипт с проверка на целостта (SRI): подменен файл в CDN не се изпълнява.
+function loadScript_(lib){
+  return new Promise(function(resolve, reject){
+    var s = document.createElement('script');
+    s.src = lib.src; s.integrity = lib.sri; s.crossOrigin = 'anonymous';
+    s.onload = function(){ resolve(); };
+    s.onerror = function(){ s.remove(); reject(new Error('load ' + lib.src)); };
+    document.head.appendChild(s);
+  });
+}
+// Chart.js + datalabels — само за графиките (изгледа по тримесечия и скритата графика по месеци). Един път на сесия.
+var __chartsPromise = null;
+function loadCharts_(){
+  if (window.Chart && window.ChartDataLabels) return Promise.resolve(window.Chart);
+  if (!__chartsPromise) {
+    __chartsPromise = loadScript_(LIBS.chart).then(function(){ return loadScript_(LIBS.datalabels); })
+      .then(function(){ Chart.register(ChartDataLabels); return window.Chart; });
+    __chartsPromise.catch(function(){ __chartsPromise = null; }); // при грешка — нов опит следващия път
+  }
+  return __chartsPromise;
+}
+</script>
 <style>
   :root{
     --navy:#192166; --teal:#00C4D0; --teal-deep:#009EBD;
@@ -362,7 +393,6 @@ function fmtOrDash(n, title){
   if (Math.abs(v) < 0.005) return '<span title="' + escapeHtml(title || 'Няма въведени данни') + '">—</span>';
   return fmt(v);
 }
-if (window.Chart && window.ChartDataLabels) { Chart.register(ChartDataLabels); }
 function monthLabel(key){
   var parts = key.split('-'); var names=['Яну','Фев','Мар','Апр','Май','Юни','Юли','Авг','Сеп','Окт','Ное','Дек'];
   return names[Number(parts[1])-1] + " " + parts[0].slice(2);
@@ -476,7 +506,10 @@ function toggleAdmin(){
   if (tbtn) tbtn.setAttribute('aria-expanded', opening ? 'true' : 'false');
   if (opening) {
     document.getElementById('printDate').textContent = 'Актуално към ' + new Date().toLocaleDateString('bg-BG', {day:'2-digit', month:'long', year:'numeric'});
-    drawAdminChart(window.__lastData);
+    var box = document.getElementById('allDebtorsBox');
+    if (box && !window.Chart) box.innerHTML = '<div class="chart-note" style="padding:30px 0">Зареждане на графиката…</div>';
+    loadCharts_().then(function(){ drawAdminChart(window.__lastData); })
+      .catch(function(){ if (box) box.innerHTML = '<div class="chart-note" style="padding:30px 0">Графиката не можа да се зареди. Провери връзката и опитай пак.</div>'; });
     el.scrollIntoView({behavior:'smooth'});
   }
 }
@@ -610,16 +643,8 @@ function drawAdminChart(d){
 // ---- Сваляне на админ списъка като Excel: Обект | Дължима сума (€) за ТЕКУЩОТО тримесечие ----
 // SheetJS се зарежда лениво при първо натискане; при неуспех — CSV (UTF-8 BOM, ";" и десетична запетая).
 function loadXlsx_(){
-  return new Promise(function(resolve, reject){
-    if (window.XLSX) return resolve(window.XLSX);
-    var sc = document.createElement('script');
-    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    sc.integrity = 'sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA=='; // проверка на целостта (SRI)
-    sc.crossOrigin = 'anonymous';
-    sc.onload = function(){ window.XLSX ? resolve(window.XLSX) : reject(new Error('xlsx')); };
-    sc.onerror = function(){ reject(new Error('xlsx load')); };
-    document.head.appendChild(sc);
-  });
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  return loadScript_(LIBS.xlsx).then(function(){ if (!window.XLSX) throw new Error('xlsx'); return window.XLSX; });
 }
 function downloadDebtorsExcel(){
   var d = window.__lastData || {};
@@ -668,7 +693,6 @@ function downloadDebtorsExcel(){
   }).then(done, done);
 }
 
-var IS_DEMO_MODE = SCRIPT_URL.indexOf('PASTE_YOUR') !== -1;
 
 // Всички заявки към бекенда — POST (кодът не остава в адреса, логовете и историята).
 // Тялото е form-encoded → без CORS preflight; Apps Script го чете в e.parameter.
@@ -1242,6 +1266,16 @@ function drawCharts(d){
 
   var trendEl = document.getElementById('trendChart');
   if (!trendEl) return; // графиката е скрита за този потребител (SHOW_MONTHLY_CHART / FULL_VIEW_ROLE)
+  // Chart.js се зарежда чак когато графиката е видима (виж loadCharts_).
+  loadCharts_().then(function(){ drawTrendChart_(d); }).catch(function(){
+    if (trendEl.parentNode) trendEl.parentNode.innerHTML = '<div class="chart-note" style="padding:30px 0">Графиката не можа да се зареди.</div>';
+  });
+}
+
+function drawTrendChart_(d){
+  var red = '#e4003a', green = '#3d9e4a', amber = '#d97706', muted = '#7a85a8', gridColor = 'rgba(25,33,102,0.08)';
+  var trendEl = document.getElementById('trendChart');
+  if (!trendEl) return;
   var ctx2 = trendEl.getContext('2d');
   // Месеци в бъдещето (напр. обобщен запис с дата 2027 г.) не се показват в графиката.
   var nowD = new Date(), nowKey = nowD.getFullYear() + '-' + String(nowD.getMonth() + 1).padStart(2, '0');
@@ -1303,7 +1337,7 @@ function drawCharts(d){
 
 document.getElementById('code').addEventListener('keydown', function(e){ if (e.key === 'Enter') checkCode(); });
 
-if ('serviceWorker' in navigator && !IS_DEMO_MODE) {
+if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
     navigator.serviceWorker.register('sw.js').catch(function(){});
   });
