@@ -1130,25 +1130,26 @@ function render(d){
   }
   var updatedBadgeHtml = (asOfBadgeHtml || paidBadgeHtml) ? '<div class="badges">' + asOfBadgeHtml + paidBadgeHtml + '</div>' : '<span></span>';
 
+  // "Как да платя" (25.11.2026, по молба на Евелина): показва се ВИНАГИ за обект — и когато всичко е платено (иначе
+  // платилият напред нямаше откъде да види IBAN-а). "Сума" — само ако има какво да се плаща. Основанието е само номерът
+  // на обекта ("Г59"): дългото "… — входна такса Сутерен до края на тримесечието (12.2026)" хората често режеха, а
+  // периодът не е верен за всеки (някои плащат на части, други — за година напред).
   var payBoxHtml = '';
-  if (dueShown > 0.005 && d.bankIban && d.bankIban.toUpperCase().indexOf('ПОПЪЛНИ') === -1) {
-    // Основание: обект (+тип, ако е кратко) и периодът — до края на тримесечието (таксите се плащат на тримесечия).
-    var payNow = new Date();
-    var payQEnd = (d.quarter && /^\d{4}-\d{2}$/.test(String(d.quarter.endKey || ''))) ? String(d.quarter.endKey).slice(5, 7) + '.' + String(d.quarter.endKey).slice(0, 4)
-      : String((Math.floor(payNow.getMonth() / 3) + 1) * 3).padStart(2, '0') + '.' + payNow.getFullYear();
-    var paySuffix = ' — входна такса Сутерен до края на тримесечието (' + payQEnd + ')';
-    var payRef = String(d.unit) + paySuffix;
-    if (payRef.length > 140) payRef = String(d.unit).slice(0, 140 - paySuffix.length - 1) + '…' + paySuffix; // лимит на основанието в банките (140 знака)
+  var hasPayAmt = dueShown > 0.005;
+  if ((hasPayAmt || (d.quarter && d.quarter.startKey)) && d.bankIban && d.bankIban.toUpperCase().indexOf('ПОПЪЛНИ') === -1) {
+    var payRef = String(d.unit || '').trim();
+    if (payRef.length > 140) payRef = payRef.slice(0, 139) + '…'; // лимит на основанието в банките (140 знака)
     var ibanShown = String(d.bankIban).replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim(); // по 4 знака; копира се без интервали
     payBoxHtml = '<div class="pay-box"><div class="pay-heading">Как да платя</div>'
-      + '<div class="pay-field"><div class="pay-field-main"><div class="pay-label">Сума</div><div class="pay-val pay-val-ref">' + escapeHtml(fmt(dueShown)) + '</div></div></div>'
+      + (hasPayAmt ? '<div class="pay-field"><div class="pay-field-main"><div class="pay-label">Сума</div><div class="pay-val pay-val-ref">' + escapeHtml(fmt(dueShown)) + '</div></div></div>' : '')
       + '<div class="pay-field"><div class="pay-field-main"><div class="pay-label">IBAN за такси</div><div class="pay-val" id="payIban">' + escapeHtml(ibanShown) + '</div></div>'
       + '<button class="pay-copy" onclick="copyIban()">📋 Копирай</button></div>'
       + '<div class="pay-field"><div class="pay-field-main"><div class="pay-label">Основание за превода</div><div class="pay-val pay-val-ref" id="payRef">' + escapeHtml(payRef) + '</div></div>'
       + '<button class="pay-copy alt" onclick="copyRef()">📋 Копирай</button></div>'
       + '<div class="pay-copied" id="payCopied">✅ IBAN копиран</div>'
       + '<div class="pay-copied" id="payRefCopied">✅ Основанието е копирано</div>'
-      + '<div class="pay-note">Задължително посочвай кода на обекта и периода в основанието, за да се разпознае плащането.</div>'
+      + '<div class="pay-note">' + (hasPayAmt ? '' : 'В момента нямаш сума за плащане — данните са за следващото плащане. ')
+      + 'В основанието пиши само номера на обекта, за да се разпознае плащането.</div>'
       + '</div>';
   }
 
